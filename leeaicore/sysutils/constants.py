@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class UserType(Enum):
+class UserRole(Enum):
     ADMIN = "ADMIN"
     RESTAURANT = "RESTAURANT"
     USER = "USER"
