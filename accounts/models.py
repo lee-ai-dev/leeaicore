@@ -15,7 +15,7 @@ from django.db import IntegrityError, transaction
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
-
+# from django.contrib.auth import get_user_model
 from leeaicore.sysutils.models import TimeStampedModel
 from leeaicore.sysutils.services import send_sms
 
@@ -62,6 +62,13 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     def __str__(self):
         return self.name
 
+
+class FCMDevice(TimeStampedModel):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    token = models.CharField(max_length=255, unique=True)
+
+    def __str__(self):
+        return f"{self.user.name} - {self.token[:10]}"
 
 class Restaurant(TimeStampedModel):
     '''Restaurant model for storing restaurant information'''
