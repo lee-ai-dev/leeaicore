@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission
 
-from leeaicore.sysutils.constants import UserType
+from leeaicore.sysutils.constants import UserRole
 
 
 
@@ -17,7 +17,9 @@ class IsStaffAdmin(BasePermission):
     """
     def has_permission(self, request, view):
         user = request.user
-        return user.is_authenticated and (user.is_staff or user.user_type == UserType.ADMIN.value)
+        # Allow if user is staff or has role ADMIN
+        role = getattr(user, 'role', None)
+        return user.is_authenticated and (user.is_staff or role == UserRole.ADMIN.value)
     
 class IsRestaurantUser(BasePermission):
     """
@@ -25,4 +27,5 @@ class IsRestaurantUser(BasePermission):
     """
     def has_permission(self, request, view):
         user = request.user
-        return user.is_authenticated and user.user_type == UserType.RESTAURANT.value
+        role = getattr(user, 'role', None)
+        return user.is_authenticated and role == UserRole.RESTAURANT.value
