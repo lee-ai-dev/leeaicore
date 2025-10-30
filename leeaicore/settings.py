@@ -27,7 +27,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     # internal apps
-    'accounts.apps.AccountsConfig'
+    'accounts.apps.AccountsConfig',
+    'api.apps.ApiConfig',
 
     # Third-party apps
     'channels',
