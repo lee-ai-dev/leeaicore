@@ -13,6 +13,12 @@ class DishSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class DishCreateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Dish
+        exclude = ("restaurant", "created_at", "updated_at")
+
+
 class MenuQuerySerializer(serializers.Serializer):
     restaurant_rid = serializers.CharField(required=False, allow_blank=True)
     q = serializers.CharField(required=False, allow_blank=True)
@@ -99,6 +105,12 @@ class TableSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class TableCreateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Table
+        exclude = ("created_at", "updated_at")
+
+
 class ReservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
@@ -128,3 +140,11 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = "__all__"
         read_only_fields = ("status", "amount", "currency", "user")
+
+
+class OrderStatusUpdateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=[(s.value, s.value) for s in OrderStatus])
+
+
+class ReservationStatusUpdateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=[("APPROVED", "APPROVED"), ("PENDING", "PENDING"), ("CANCELLED", "CANCELLED")])
