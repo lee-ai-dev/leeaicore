@@ -4,6 +4,10 @@ import random
 from accounts.models import Restaurant, User
 from leeaicore.sysutils.constants import Status as SS
 from leeaicore.sysutils.models import TimeStampedModel
+from django.db import IntegrityError
+from django.db.models.signals import m2m_changed
+from django.dispatch import receiver
+from leeaicore.sysutils.constants import OrderStatus, PaymentStatus, ComplaintStatus
 
 
 # Order ID generator that does NOT touch the DB during import/app checks
@@ -73,10 +77,16 @@ class Order(TimeStampedModel):
     def __str__(self):
         return f"Order {self.ord_id} by {self.user.name}"
     
-    # compute total price from items when saving
+    # collision-safe save for ord_id; total is managed via m2m signal
     def save(self, *args, **kwargs):
-        self.total_price = sum(item.dish.price * item.quantity for item in self.items.all())
-        super().save(*args, **kwargs)
+        retries = kwargs.pop("retries", 3)
+        try:
+            return super().save(*args, **kwargs)
+        except IntegrityError as e:
+            if "ord_id" in str(e).lower() and retries > 0:
+                self.ord_id = generate_order_id()
+                return self.save(*args, retries=retries - 1, **kwargs)
+            raise
     
 class Reservation(TimeStampedModel):
     '''model for storing table reservations'''
@@ -87,3 +97,38 @@ class Reservation(TimeStampedModel):
     
     def __str__(self):
         return f"RSV (Table {self.table.table_id}): {self.status}"
+
+
+# Keep order total in sync with items through m2m changes
+@receiver(m2m_changed, sender=Order.items.through)
+def update_order_total(sender, instance: Order, action, **kwargs):
+    if action in ("post_add", "post_remove", "post_clear"):
+        total = sum(item.dish.price * item.quantity for item in instance.items.all())
+        Order.objects.filter(pk=instance.pk).update(total_price=total)
+
+
+class Payment(TimeStampedModel):
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="payments")
+    user = models.ForeignKey(User, on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=5, default='GHC')
+    provider = models.CharField(max_length=50, default='MOCK')
+    status = models.CharField(max_length=20, default=PaymentStatus.PENDING.value)
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    client_secret = models.CharField(max_length=200, blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    def __str__(self):
+        return f"{self.provider} {self.status} {self.amount}{self.currency} for {self.order.ord_id}"
+
+
+class Complaint(TimeStampedModel):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.SET_NULL, blank=True, null=True)
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, blank=True, null=True)
+    subject = models.CharField(max_length=120)
+    message = models.TextField()
+    status = models.CharField(max_length=20, default=ComplaintStatus.OPEN.value)
+
+    def __str__(self):
+        return f"Complaint #{self.id} {self.status}"
