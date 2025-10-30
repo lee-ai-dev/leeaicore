@@ -3,6 +3,7 @@ venv
 db.sqlite3
 schema.yaml
 deployment-config/
+lee.json
 
 # Python bytecode/cache
 __pycache__/
