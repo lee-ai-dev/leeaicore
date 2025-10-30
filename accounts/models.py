@@ -16,7 +16,9 @@ from django.db import IntegrityError, transaction
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 # from django.contrib.auth import get_user_model
+from leeaicore.sysutils.constants import UserRole
 from leeaicore.sysutils.models import TimeStampedModel
+from leeaicore.sysutils.constants import UserRole
 from leeaicore.sysutils.services import send_sms
 
 from .manager import AccountManager
@@ -38,8 +40,9 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     name = models.CharField(max_length=255)
     address = models.CharField(max_length=500, blank=True, null=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    role = models.CharField(max_length=20, default=UserRole.USER.value)
     admin_verified = models.BooleanField(default=False)
-
+    role = models.CharField(max_length=20, default=UserRole.USER.value)  # USER, RESTAURANT, ADMIN
     deleted = models.BooleanField(default=False)  # Soft delete
 
     is_active = models.BooleanField(default=True)
