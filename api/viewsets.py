@@ -12,6 +12,7 @@ from api.models import Complaint, Dish, Order, Payment, Reservation, Table
 from api.serializers import (
 	ComplaintSerializer,
 	DishSerializer,
+	DishCreateUpdateSerializer,
 	MenuQuerySerializer,
 	OrderSerializer,
 	PaymentConfirmSerializer,
@@ -19,6 +20,10 @@ from api.serializers import (
 	PaymentSerializer,
 	PlaceOrderSerializer,
 	ReservationSerializer,
+	TableSerializer,
+	TableCreateUpdateSerializer,
+	OrderStatusUpdateSerializer,
+	ReservationStatusUpdateSerializer,
 )
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 
@@ -198,3 +203,283 @@ class ChatbotIntentAPI(APIView):
 		engine = IntentEngine()
 		result = engine.classify(message)
 		return Response(result, status=200)
+
+
+class RestaurantOrdersAPI(APIView):
+	"""List orders belonging to the authenticated restaurant owner."""
+	permission_classes = (permissions.IsAuthenticated,)
+
+	@extend_schema(
+		parameters=[
+			OpenApiParameter(name='status', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False),
+			OpenApiParameter(name='payment_status', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False),
+			OpenApiParameter(name='q', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False, description='Search by ord_id'),
+			OpenApiParameter(name='created_from', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY, required=False),
+			OpenApiParameter(name='created_to', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY, required=False),
+		],
+		responses={200: OrderSerializer(many=True)},
+		operation_id='restaurant_orders_list',
+		description='List orders for the authenticated restaurant owner.'
+	)
+	def get(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+
+		qs = Order.objects.all()
+		if restaurant:
+			qs = qs.filter(restaurant=restaurant)
+
+		status_q = request.query_params.get('status')
+		if status_q:
+			qs = qs.filter(status__iexact=status_q)
+
+		payment_status = request.query_params.get('payment_status')
+		if payment_status:
+			qs = qs.filter(payment_status__iexact=payment_status)
+
+		q = request.query_params.get('q')
+		if q:
+			qs = qs.filter(ord_id__icontains=q)
+
+		created_from = request.query_params.get('created_from')
+		created_to = request.query_params.get('created_to')
+		if created_from:
+			qs = qs.filter(created_at__date__gte=created_from)
+		if created_to:
+			qs = qs.filter(created_at__date__lte=created_to)
+
+		qs = qs.order_by('-created_at')
+		return Response(OrderSerializer(qs, many=True).data)
+
+
+class RestaurantReservationsAPI(APIView):
+	"""List reservations belonging to the authenticated restaurant owner."""
+	permission_classes = (permissions.IsAuthenticated,)
+
+	@extend_schema(
+		parameters=[
+			OpenApiParameter(name='status', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False),
+			OpenApiParameter(name='created_from', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY, required=False),
+			OpenApiParameter(name='created_to', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY, required=False),
+		],
+		responses={200: ReservationSerializer(many=True)},
+		operation_id='restaurant_reservations_list',
+		description='List reservations for the authenticated restaurant owner.'
+	)
+	def get(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+
+		qs = Reservation.objects.all()
+		if restaurant:
+			qs = qs.filter(restaurant=restaurant)
+
+		status_q = request.query_params.get('status')
+		if status_q:
+			qs = qs.filter(status__iexact=status_q)
+		created_from = request.query_params.get('created_from')
+		created_to = request.query_params.get('created_to')
+		if created_from:
+			qs = qs.filter(created_at__date__gte=created_from)
+		if created_to:
+			qs = qs.filter(created_at__date__lte=created_to)
+
+		qs = qs.order_by('-created_at')
+		return Response(ReservationSerializer(qs, many=True).data)
+
+
+class RestaurantOrderUpdateAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+
+	@extend_schema(request=OrderStatusUpdateSerializer, responses={200: OrderSerializer}, operation_id='restaurant_order_update')
+	def patch(self, request, ord_id: str):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+
+		order = Order.objects.filter(ord_id=ord_id).first()
+		if not order:
+			return Response({"message": "Order not found"}, status=404)
+		if restaurant and order.restaurant_id != restaurant.id and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Not authorized"}, status=403)
+
+		ser = OrderStatusUpdateSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		order.status = ser.validated_data['status']
+		order.save(update_fields=['status', 'updated_at'])
+		return Response(OrderSerializer(order).data)
+
+
+class RestaurantReservationUpdateAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+
+	@extend_schema(request=ReservationStatusUpdateSerializer, responses={200: ReservationSerializer}, operation_id='restaurant_reservation_update')
+	def patch(self, request, pk: int):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+
+		reservation = Reservation.objects.filter(id=pk).first()
+		if not reservation:
+			return Response({"message": "Reservation not found"}, status=404)
+		if restaurant and reservation.restaurant_id != restaurant.id and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Not authorized"}, status=403)
+
+		ser = ReservationStatusUpdateSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		new_status = ser.validated_data['status']
+		reservation.status = new_status
+		reservation.save(update_fields=['status', 'updated_at'])
+		# Free up table on cancellation
+		if new_status == 'CANCELLED':
+			Table.objects.filter(id=reservation.table_id).update(available=True)
+		return Response(ReservationSerializer(reservation).data)
+
+
+class RestaurantDishListCreateAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+
+	@extend_schema(responses={200: DishSerializer(many=True)}, operation_id='restaurant_dishes_list')
+	def get(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+		qs = Dish.objects.all()
+		if restaurant:
+			qs = qs.filter(restaurant=restaurant)
+		q = request.query_params.get('q')
+		if q:
+			qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+		return Response(DishSerializer(qs.order_by('name'), many=True).data)
+
+	@extend_schema(request=DishCreateUpdateSerializer, responses={200: DishSerializer}, operation_id='restaurant_dishes_create')
+	def post(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+		ser = DishCreateUpdateSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		dish = Dish.objects.create(restaurant=restaurant or Restaurant.objects.first(), **ser.validated_data)
+		return Response(DishSerializer(dish).data)
+
+
+class RestaurantDishDetailAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+
+	def _get_obj(self, request, pk: int):
+		dish = Dish.objects.filter(id=pk).first()
+		if not dish:
+			return None, Response({"message": "Dish not found"}, status=404)
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if restaurant and dish.restaurant_id != restaurant.id and not (request.user.is_staff or request.user.is_superuser):
+			return None, Response({"message": "Not authorized"}, status=403)
+		return dish, None
+
+	@extend_schema(responses={200: DishSerializer}, operation_id='restaurant_dishes_retrieve')
+	def get(self, request, pk: int):
+		dish, error = self._get_obj(request, pk)
+		if error:
+			return error
+		return Response(DishSerializer(dish).data)
+
+	@extend_schema(request=DishCreateUpdateSerializer, responses={200: DishSerializer}, operation_id='restaurant_dishes_update')
+	def put(self, request, pk: int):
+		dish, error = self._get_obj(request, pk)
+		if error:
+			return error
+		ser = DishCreateUpdateSerializer(dish, data=request.data)
+		ser.is_valid(raise_exception=True)
+		ser.save()
+		return Response(DishSerializer(dish).data)
+
+	@extend_schema(request=DishCreateUpdateSerializer, responses={200: DishSerializer}, operation_id='restaurant_dishes_partial_update')
+	def patch(self, request, pk: int):
+		dish, error = self._get_obj(request, pk)
+		if error:
+			return error
+		ser = DishCreateUpdateSerializer(dish, data=request.data, partial=True)
+		ser.is_valid(raise_exception=True)
+		ser.save()
+		return Response(DishSerializer(dish).data)
+
+	@extend_schema(responses={204: None}, operation_id='restaurant_dishes_delete')
+	def delete(self, request, pk: int):
+		dish, error = self._get_obj(request, pk)
+		if error:
+			return error
+		dish.delete()
+		return Response(status=204)
+
+
+class RestaurantTableListCreateAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+
+	@extend_schema(responses={200: TableSerializer(many=True)}, operation_id='restaurant_tables_list')
+	def get(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+		qs = Table.objects.all()
+		if restaurant:
+			qs = qs.filter(restaurant=restaurant)
+		return Response(TableSerializer(qs.order_by('table_id'), many=True).data)
+
+	@extend_schema(request=TableCreateUpdateSerializer, responses={200: TableSerializer}, operation_id='restaurant_tables_create')
+	def post(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+		ser = TableCreateUpdateSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		table = Table.objects.create(restaurant=restaurant or Restaurant.objects.first(), **ser.validated_data)
+		return Response(TableSerializer(table).data)
+
+
+class RestaurantTableDetailAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+
+	def _get_obj(self, request, pk: int):
+		table = Table.objects.filter(id=pk).first()
+		if not table:
+			return None, Response({"message": "Table not found"}, status=404)
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if restaurant and table.restaurant_id != restaurant.id and not (request.user.is_staff or request.user.is_superuser):
+			return None, Response({"message": "Not authorized"}, status=403)
+		return table, None
+
+	@extend_schema(responses={200: TableSerializer}, operation_id='restaurant_tables_retrieve')
+	def get(self, request, pk: int):
+		table, error = self._get_obj(request, pk)
+		if error:
+			return error
+		return Response(TableSerializer(table).data)
+
+	@extend_schema(request=TableCreateUpdateSerializer, responses={200: TableSerializer}, operation_id='restaurant_tables_update')
+	def put(self, request, pk: int):
+		table, error = self._get_obj(request, pk)
+		if error:
+			return error
+		ser = TableCreateUpdateSerializer(table, data=request.data)
+		ser.is_valid(raise_exception=True)
+		ser.save()
+		return Response(TableSerializer(table).data)
+
+	@extend_schema(request=TableCreateUpdateSerializer, responses={200: TableSerializer}, operation_id='restaurant_tables_partial_update')
+	def patch(self, request, pk: int):
+		table, error = self._get_obj(request, pk)
+		if error:
+			return error
+		ser = TableCreateUpdateSerializer(table, data=request.data, partial=True)
+		ser.is_valid(raise_exception=True)
+		ser.save()
+		return Response(TableSerializer(table).data)
+
+	@extend_schema(responses={204: None}, operation_id='restaurant_tables_delete')
+	def delete(self, request, pk: int):
+		table, error = self._get_obj(request, pk)
+		if error:
+			return error
+		table.delete()
+		return Response(status=204)
