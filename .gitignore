@@ -1,0 +1,10 @@
+venv
+.env
+db.sqlite3
+schema.yaml
+deployment-config/
+
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*$py.class
