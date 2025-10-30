@@ -29,9 +29,9 @@ INSTALLED_APPS = [
     # internal apps
     'accounts.apps.AccountsConfig',
     'api.apps.ApiConfig',
+    'agentic.apps.AgenticConfig',
 
     # Third-party apps
-    'channels',
     'corsheaders',
     'rest_framework',
     'knox',
@@ -174,3 +174,10 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
+
+# OpenAI settings (optional; features will gracefully degrade without a key)
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+
+# Payment provider selection (mock by default)
+PAYMENT_PROVIDER = os.getenv('PAYMENT_PROVIDER', 'MOCK')
