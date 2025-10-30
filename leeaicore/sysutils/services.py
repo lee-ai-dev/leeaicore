@@ -1,11 +1,19 @@
 import array
-from pyfcm import FCMNotification
+
+try:
+    from pyfcm import FCMNotification  # type: ignore
+    _HAS_PYFCM = True
+except Exception:
+    FCMNotification = None
+    _HAS_PYFCM = False
 
 
-push_service = FCMNotification(
-    service_account_file="lee.json",
-    project_id="leeaicore",
-)
+push_service = None
+if _HAS_PYFCM:
+    push_service = FCMNotification(
+        service_account_file="lee.json",
+        project_id="leeaicore",
+    )
 
 def send_push_notification(user, title, message):
     from accounts.models import FCMDevice
@@ -16,17 +24,21 @@ def send_push_notification(user, title, message):
         print("No devices found for user.")
         return "No devices"
     
-    params_list = [
-        {
-            "fcm_token": token,
-            "notification_title": title,
-            "notification_body": message,
-        }
-        for token in registration_ids
-    ]
-    result = push_service.async_notify_multiple_devices(
-        params_list=params_list,
+    if not _HAS_PYFCM or push_service is None:
+        print("pyfcm not installed; skipping push notification send")
+        return "pyfcm-not-installed"
+
+    params_list = (
+        [
+            {
+                "fcm_token": token,
+                "notification_title": title,
+                "notification_body": message,
+            }
+            for token in registration_ids
+        ]
     )
+    result = push_service.async_notify_multiple_devices(params_list=params_list)
 
     print(f"Push notification sent to {len(registration_ids)} devices: {result}")
 
