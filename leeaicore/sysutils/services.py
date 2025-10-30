@@ -1,6 +1,6 @@
 import array
 from pyfcm import FCMNotification
-from .models import FCMDevice
+
 
 push_service = FCMNotification(
     service_account_file="lee.json",
@@ -8,6 +8,7 @@ push_service = FCMNotification(
 )
 
 def send_push_notification(user, title, message):
+    from accounts.models import FCMDevice
     devices = FCMDevice.objects.filter(user=user)
     registration_ids = [device.token for device in devices]
 
