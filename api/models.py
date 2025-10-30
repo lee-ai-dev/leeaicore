@@ -1,12 +1,26 @@
 from django.db import models
-
+import string
+import random
+from accounts.models import Restaurant, User
+from leeaicore.sysutils.constants import Status as SS
 from leeaicore.sysutils.models import TimeStampedModel
 
+
+# Order ID generator that does NOT touch the DB during import/app checks
+def generate_order_id() -> str:
+    """Generate order id (ORD-XXXXXXXX) without querying the DB.
+    Uniqueness is enforced with retries in Order.save().
+    """
+    alphabet = string.ascii_uppercase + string.digits
+    return 'ORD-' + ''.join(random.choices(alphabet, k=8))
+
 class Dish(TimeStampedModel):
-    restaurant = models.ForeignKey('Restaurant', on_delete=models.CASCADE)
+    '''Dish/meal model'''
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     name = models.CharField(max_length=200)
     description = models.CharField(max_length=500)
     currency = models.CharField(max_length=5, default='GHC')
+    in_stock = models.BooleanField(default=True)
     price = models.PositiveIntegerField(default=0)
     type = models.CharField(max_length=50)
     tag = models.CharField(max_length=20)
@@ -14,3 +28,62 @@ class Dish(TimeStampedModel):
 
     def __str__(self):
         return f"{self.name}"
+    
+
+class Table(TimeStampedModel):
+    '''Seat/table model for storing available seats or tables in the restaurants'''
+    table_id = models.CharField(max_length=10)
+    capacity = models.PositiveSmallIntegerField(default=1)
+    type = models.CharField(max_length=15)
+    description = models.CharField(max_length=250, blank=True)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    buffer_time = models.CharField(max_length=10, blank=True, null=True)
+    currency = models.CharField(max_length=10)
+    price = models.FloatField(default=0.0)
+    available = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Table {self.table_id}: {self.currency}{self.price}"
+
+
+
+class OrderItem(TimeStampedModel):
+    '''OrderItem model for storing individual dish and quantity'''
+    dish = models.ForeignKey(Dish, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.dish.name} x {self.quantity}"
+
+class Order(TimeStampedModel):
+    '''Order model for storing order information'''
+    ord_id = models.CharField(max_length=15, unique=True, default=generate_order_id)
+    user = models.ForeignKey('accounts.User', on_delete=models.PROTECT)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.PROTECT)
+    items = models.ManyToManyField(OrderItem)
+    total_price = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=50, default='Pending')
+    delivery_address = models.CharField(max_length=500)
+    payment_method = models.CharField(max_length=50, default='Cash on Delivery')
+    payment_status = models.CharField(max_length=50, default='Unpaid')
+    currency = models.CharField(max_length=5, default='GHC')
+    special_instructions = models.CharField(max_length=500, blank=True, null=True)
+
+    def __str__(self):
+        return f"Order {self.ord_id} by {self.user.name}"
+    
+    # compute total price from items when saving
+    def save(self, *args, **kwargs):
+        self.total_price = sum(item.dish.price * item.quantity for item in self.items.all())
+        super().save(*args, **kwargs)
+    
+class Reservation(TimeStampedModel):
+    '''model for storing table reservations'''
+    table = models.ForeignKey(Table, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=[(s.value, s.value) for s in SS], default=SS.PENDING.value)
+    
+    def __str__(self):
+        return f"RSV (Table {self.table.table_id}): {self.status}"
