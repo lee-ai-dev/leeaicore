@@ -132,7 +132,8 @@ class PaymentIntentSerializer(serializers.Serializer):
 
 class PaymentConfirmSerializer(serializers.Serializer):
     ord_id = serializers.CharField()
-    transaction_id = serializers.CharField()
+    transaction_id = serializers.CharField(required=False, allow_blank=True)
+    reference = serializers.CharField(required=False, allow_blank=True)
 
 
 class PaymentSerializer(serializers.ModelSerializer):
