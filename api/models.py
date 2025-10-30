@@ -36,6 +36,7 @@ class Dish(TimeStampedModel):
 
 class Table(TimeStampedModel):
     '''Seat/table model for storing available seats or tables in the restaurants'''
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, null=True, blank=True)
     table_id = models.CharField(max_length=10)
     capacity = models.PositiveSmallIntegerField(default=1)
     type = models.CharField(max_length=15)
