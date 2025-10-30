@@ -23,3 +23,15 @@ urlpatterns += [
     path('admin/verifyuser/', AdminVerifyUserAPIView.as_view(), name='admin_verify_user'),
     path('admin/users/', AdminListUsersAPIView.as_view(), name='admin_users'),
 ]
+
+# core restaurant features
+urlpatterns += [
+    path('menu/', vs.MenuListAPI.as_view(), name='menu'),
+    path('orders/place/', vs.PlaceOrderAPI.as_view(), name='place_order'),
+    path('orders/<str:ord_id>/status/', vs.OrderStatusAPI.as_view(), name='order_status'),
+    path('reservations/', vs.ReservationAPI.as_view(), name='reservations'),
+    path('complaints/', vs.ComplaintAPI.as_view(), name='complaints'),
+    path('payments/intent/', vs.PaymentIntentAPI.as_view(), name='payment_intent'),
+    path('payments/<str:ord_id>/confirm/', vs.PaymentConfirmAPI.as_view(), name='payment_confirm'),
+    path('chatbot/intent/', vs.ChatbotIntentAPI.as_view(), name='chatbot_intent'),
+]
