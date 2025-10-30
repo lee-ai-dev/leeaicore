@@ -5,6 +5,9 @@ from drf_spectacular.types import OpenApiTypes
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
+from django.conf import settings
+from decimal import Decimal
 
 from accounts.models import Restaurant
 from agentic.services import IntentEngine
@@ -26,10 +29,12 @@ from api.serializers import (
 	ReservationStatusUpdateSerializer,
 )
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
+from api.services import PaystackClient
 
 
 class MenuListAPI(APIView):
 	permission_classes = (permissions.AllowAny,)
+	throttle_scope = 'restaurant'
 
 	@extend_schema(
 		parameters=[
@@ -60,6 +65,7 @@ class MenuListAPI(APIView):
 
 class PlaceOrderAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'orders'
 
 	@extend_schema(request=PlaceOrderSerializer, responses={200: OrderSerializer}, operation_id='place_order')
 	def post(self, request):
@@ -71,6 +77,7 @@ class PlaceOrderAPI(APIView):
 
 class OrderStatusAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'orders'
 
 	@extend_schema(
 		parameters=[OpenApiParameter(name='ord_id', type=OpenApiTypes.STR, location=OpenApiParameter.PATH, required=True)],
@@ -88,11 +95,17 @@ class OrderStatusAPI(APIView):
 
 class ReservationAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'orders'
 
 	@extend_schema(responses={200: ReservationSerializer(many=True)}, operation_id='list_reservations')
 	def get(self, request):
 		qs = Reservation.objects.filter(user=request.user).order_by("-created_at")
-		return Response(ReservationSerializer(qs, many=True).data)
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = ReservationSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
 
 	@extend_schema(request=ReservationSerializer, responses={200: ReservationSerializer}, operation_id='create_reservation')
 	@transaction.atomic
@@ -118,6 +131,7 @@ class ReservationAPI(APIView):
 
 class ComplaintAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'orders'
 
 	@extend_schema(request=ComplaintSerializer, responses={200: ComplaintSerializer}, operation_id='submit_complaint')
 	def post(self, request):
@@ -130,6 +144,7 @@ class ComplaintAPI(APIView):
 
 class PaymentIntentAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'orders'
 
 	@extend_schema(request=PaymentIntentSerializer, responses={200: PaymentSerializer}, operation_id='payment_intent')
 	@transaction.atomic
@@ -137,7 +152,7 @@ class PaymentIntentAPI(APIView):
 		ser = PaymentIntentSerializer(data=request.data)
 		ser.is_valid(raise_exception=True)
 		ord_id = ser.validated_data["ord_id"]
-		provider = ser.validated_data.get("provider", "MOCK")
+		provider = ser.validated_data.get("provider") or getattr(settings, 'PAYMENT_PROVIDER', 'MOCK').upper()
 
 		order = Order.objects.filter(ord_id=ord_id, user=request.user).first()
 		if not order:
@@ -145,20 +160,47 @@ class PaymentIntentAPI(APIView):
 		if order.payment_status.lower() == "paid":
 			return Response({"message": "Order already paid"}, status=400)
 
-		payment = Payment.objects.create(
-			order=order,
-			user=request.user,
-			amount=order.total_price,
-			currency=order.currency,
-			provider=provider,
-			status=PaymentStatus.PENDING.value,
-			client_secret=f"mock_{order.ord_id}_secret",
-		)
-		return Response(PaymentSerializer(payment).data)
+		if provider.upper() == 'PAYSTACK':
+			# Initialize Paystack transaction
+			client = PaystackClient()
+			amount_minor = int((Decimal(order.total_price) * 100).quantize(Decimal('1')))
+			# Use ord_id as reference to ensure idempotency
+			init_data = client.initialize(
+				email=request.user.email or f"user{request.user.id}@example.com",
+				amount_minor=amount_minor,
+				reference=order.ord_id,
+				currency=order.currency or 'GHS',
+			)
+			payment = Payment.objects.create(
+				order=order,
+				user=request.user,
+				amount=order.total_price,
+				currency=order.currency,
+				provider='PAYSTACK',
+				status=PaymentStatus.PENDING.value,
+				client_secret=init_data.get('access_code') or init_data.get('reference', ''),
+				metadata={
+					'authorization_url': init_data.get('authorization_url'),
+					'reference': init_data.get('reference'),
+				},
+			)
+			return Response(PaymentSerializer(payment).data)
+		else:
+			payment = Payment.objects.create(
+				order=order,
+				user=request.user,
+				amount=order.total_price,
+				currency=order.currency,
+				provider='MOCK',
+				status=PaymentStatus.PENDING.value,
+				client_secret=f"mock_{order.ord_id}_secret",
+			)
+			return Response(PaymentSerializer(payment).data)
 
 
 class PaymentConfirmAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'orders'
 
 	@extend_schema(request=PaymentConfirmSerializer, responses={200: PaymentSerializer}, operation_id='payment_confirm')
 	@transaction.atomic
@@ -174,11 +216,26 @@ class PaymentConfirmAPI(APIView):
 		if not payment:
 			return Response({"message": "No pending payment found"}, status=404)
 
-		txn_id = ser.validated_data["transaction_id"]
-		# Mock verification success
-		payment.transaction_id = txn_id
-		payment.status = PaymentStatus.SUCCEEDED.value
-		payment.save(update_fields=["transaction_id", "status", "updated_at"])
+		txn_id = ser.validated_data.get("transaction_id")
+		reference = ser.validated_data.get("reference") or payment.metadata.get('reference') if payment.metadata else None
+
+		provider = payment.provider.upper()
+		if provider == 'PAYSTACK':
+			ref = reference or txn_id or order.ord_id
+			client = PaystackClient()
+			verify = client.verify(ref)
+			status_str = (verify.get('status') or '').lower()
+			if status_str != 'success':
+				return Response({'message': 'Payment not successful'}, status=400)
+			payment.transaction_id = verify.get('reference') or ref
+			payment.status = PaymentStatus.SUCCEEDED.value
+			payment.metadata = {**(payment.metadata or {}), 'gateway_response': verify.get('gateway_response')}
+			payment.save(update_fields=["transaction_id", "status", "metadata", "updated_at"])
+		else:
+			# Mock verification success
+			payment.transaction_id = txn_id or f"mock_{order.ord_id}"
+			payment.status = PaymentStatus.SUCCEEDED.value
+			payment.save(update_fields=["transaction_id", "status", "updated_at"])
 
 		order.payment_status = "Paid"
 		order.status = OrderStatus.CONFIRMED.value
@@ -189,6 +246,7 @@ class PaymentConfirmAPI(APIView):
 
 class ChatbotIntentAPI(APIView):
 	permission_classes = (permissions.AllowAny,)
+	throttle_scope = 'chatbot'
 
 	@extend_schema(
 		request=None,
@@ -208,6 +266,7 @@ class ChatbotIntentAPI(APIView):
 class RestaurantOrdersAPI(APIView):
 	"""List orders belonging to the authenticated restaurant owner."""
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
 
 	@extend_schema(
 		parameters=[
@@ -250,12 +309,18 @@ class RestaurantOrdersAPI(APIView):
 			qs = qs.filter(created_at__date__lte=created_to)
 
 		qs = qs.order_by('-created_at')
-		return Response(OrderSerializer(qs, many=True).data)
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = OrderSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
 
 
 class RestaurantReservationsAPI(APIView):
 	"""List reservations belonging to the authenticated restaurant owner."""
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
 
 	@extend_schema(
 		parameters=[
@@ -287,11 +352,17 @@ class RestaurantReservationsAPI(APIView):
 			qs = qs.filter(created_at__date__lte=created_to)
 
 		qs = qs.order_by('-created_at')
-		return Response(ReservationSerializer(qs, many=True).data)
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = ReservationSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
 
 
 class RestaurantOrderUpdateAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
 
 	@extend_schema(request=OrderStatusUpdateSerializer, responses={200: OrderSerializer}, operation_id='restaurant_order_update')
 	def patch(self, request, ord_id: str):
@@ -307,13 +378,30 @@ class RestaurantOrderUpdateAPI(APIView):
 
 		ser = OrderStatusUpdateSerializer(data=request.data)
 		ser.is_valid(raise_exception=True)
-		order.status = ser.validated_data['status']
+		new_status = ser.validated_data['status']
+		# Enforce allowed state transitions
+		allowed = {
+			OrderStatus.PENDING.value: {OrderStatus.CONFIRMED.value, OrderStatus.CANCELLED.value},
+			OrderStatus.CONFIRMED.value: {OrderStatus.PREPARING.value, OrderStatus.CANCELLED.value},
+			OrderStatus.PREPARING.value: {OrderStatus.READY.value, OrderStatus.CANCELLED.value},
+			OrderStatus.READY.value: {OrderStatus.DISPATCHED.value, OrderStatus.CANCELLED.value},
+			OrderStatus.DISPATCHED.value: {OrderStatus.COMPLETED.value},
+			OrderStatus.COMPLETED.value: set(),
+			OrderStatus.CANCELLED.value: set(),
+		}
+		current = order.status
+		if new_status not in allowed.get(current, set()):
+			return Response({
+				'message': f'Invalid transition from {current} to {new_status}'
+			}, status=400)
+		order.status = new_status
 		order.save(update_fields=['status', 'updated_at'])
 		return Response(OrderSerializer(order).data)
 
 
 class RestaurantReservationUpdateAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
 
 	@extend_schema(request=ReservationStatusUpdateSerializer, responses={200: ReservationSerializer}, operation_id='restaurant_reservation_update')
 	def patch(self, request, pk: int):
@@ -330,6 +418,15 @@ class RestaurantReservationUpdateAPI(APIView):
 		ser = ReservationStatusUpdateSerializer(data=request.data)
 		ser.is_valid(raise_exception=True)
 		new_status = ser.validated_data['status']
+		# Allowed transitions for reservations
+		allowed_r = {
+			'PENDING': {'APPROVED', 'CANCELLED'},
+			'APPROVED': {'CANCELLED'},
+			'CANCELLED': set(),
+		}
+		current_r = reservation.status
+		if new_status not in allowed_r.get(current_r, set()):
+			return Response({'message': f'Invalid transition from {current_r} to {new_status}'}, status=400)
 		reservation.status = new_status
 		reservation.save(update_fields=['status', 'updated_at'])
 		# Free up table on cancellation
@@ -340,6 +437,7 @@ class RestaurantReservationUpdateAPI(APIView):
 
 class RestaurantDishListCreateAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
 
 	@extend_schema(responses={200: DishSerializer(many=True)}, operation_id='restaurant_dishes_list')
 	def get(self, request):
@@ -352,7 +450,13 @@ class RestaurantDishListCreateAPI(APIView):
 		q = request.query_params.get('q')
 		if q:
 			qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
-		return Response(DishSerializer(qs.order_by('name'), many=True).data)
+		qs = qs.order_by('name')
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = DishSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
 
 	@extend_schema(request=DishCreateUpdateSerializer, responses={200: DishSerializer}, operation_id='restaurant_dishes_create')
 	def post(self, request):
@@ -367,6 +471,7 @@ class RestaurantDishListCreateAPI(APIView):
 
 class RestaurantDishDetailAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
 
 	def _get_obj(self, request, pk: int):
 		dish = Dish.objects.filter(id=pk).first()
@@ -415,6 +520,7 @@ class RestaurantDishDetailAPI(APIView):
 
 class RestaurantTableListCreateAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
 
 	@extend_schema(responses={200: TableSerializer(many=True)}, operation_id='restaurant_tables_list')
 	def get(self, request):
@@ -424,7 +530,13 @@ class RestaurantTableListCreateAPI(APIView):
 		qs = Table.objects.all()
 		if restaurant:
 			qs = qs.filter(restaurant=restaurant)
-		return Response(TableSerializer(qs.order_by('table_id'), many=True).data)
+		qs = qs.order_by('table_id')
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = TableSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
 
 	@extend_schema(request=TableCreateUpdateSerializer, responses={200: TableSerializer}, operation_id='restaurant_tables_create')
 	def post(self, request):
@@ -439,6 +551,7 @@ class RestaurantTableListCreateAPI(APIView):
 
 class RestaurantTableDetailAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
 
 	def _get_obj(self, request, pk: int):
 		table = Table.objects.filter(id=pk).first()
