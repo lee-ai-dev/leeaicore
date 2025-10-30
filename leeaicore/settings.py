@@ -140,6 +140,34 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    # Pagination
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': int(os.getenv('API_PAGE_SIZE', 20)),
+    # Throttling
+    'DEFAULT_THROTTLE_CLASSES': [
+        'leeaicore.sysutils.throttling.RoleBasedScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        # Fallback scopes
+        'chatbot': os.getenv('THROTTLE_CHATBOT', '60/min'),
+        'orders': os.getenv('THROTTLE_ORDERS', '30/min'),
+        'restaurant': os.getenv('THROTTLE_RESTAURANT', '60/min'),
+        # Role-scoped overrides
+        'anonymous:orders': os.getenv('THROTTLE_ANON_ORDERS', '10/min'),
+        'user:orders': os.getenv('THROTTLE_USER_ORDERS', '30/min'),
+        'restaurant:orders': os.getenv('THROTTLE_RESTAURANT_ORDERS', '90/min'),
+        'admin:orders': os.getenv('THROTTLE_ADMIN_ORDERS', '120/min'),
+
+        'anonymous:chatbot': os.getenv('THROTTLE_ANON_CHATBOT', '30/min'),
+        'user:chatbot': os.getenv('THROTTLE_USER_CHATBOT', '60/min'),
+        'restaurant:chatbot': os.getenv('THROTTLE_RESTAURANT_CHATBOT', '90/min'),
+        'admin:chatbot': os.getenv('THROTTLE_ADMIN_CHATBOT', '120/min'),
+
+        'anonymous:restaurant': os.getenv('THROTTLE_ANON_RESTAURANT', '10/min'),
+        'user:restaurant': os.getenv('THROTTLE_USER_RESTAURANT', '20/min'),
+        'restaurant:restaurant': os.getenv('THROTTLE_RESTAURANT_RESTAURANT', '90/min'),
+        'admin:restaurant': os.getenv('THROTTLE_ADMIN_RESTAURANT', '120/min'),
+    },
 }
 # knox - make token non-expiry
 REST_KNOX = {
@@ -181,3 +209,6 @@ OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 
 # Payment provider selection (mock by default)
 PAYMENT_PROVIDER = os.getenv('PAYMENT_PROVIDER', 'MOCK')
+PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY', '')
+PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY', '')
+PAYSTACK_BASE_URL = os.getenv('PAYSTACK_BASE_URL', 'https://api.paystack.co')
