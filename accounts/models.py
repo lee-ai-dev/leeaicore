@@ -92,8 +92,39 @@ class Restaurant(TimeStampedModel):
     def __str__(self):
         return self.name
     
-    # enforce uniqueness of 
+    # enforce uniqueness of rid on save
+    def save(self, *args, **kwargs):
+        retries = kwargs.pop("retries", 3)
+        try:
+            return super().save(*args, **kwargs)
+        except IntegrityError as e:
+            if "rid" in str(e).lower() and retries > 0:
+                self.rid = generate_restaurant_id()
+                return self.save(*args, retries=retries - 1, **kwargs)
+            raise
     
+class OperationalHours(TimeStampedModel):
+    '''Operational Hours model for storing restaurant operational hours'''
+    DAYS_OF_WEEK = [
+        ("Monday", "Monday"),
+        ("Tuesday", "Tuesday"),
+        ("Wednesday", "Wednesday"),
+        ("Thursday", "Thursday"),
+        ("Friday", "Friday"),
+        ("Saturday", "Saturday"),
+        ("Sunday", "Sunday"),
+    ]
+
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    day_of_week = models.CharField(max_length=10, choices=DAYS_OF_WEEK)
+    open_time = models.TimeField()
+    close_time = models.TimeField()
+
+    class Meta:
+        unique_together = ("restaurant", "day_of_week")
+
+    def __str__(self):
+        return f"{self.restaurant.name} - {self.day_of_week}: {self.open_time} to {self.close_time}"
 
 class Wallet(TimeStampedModel):
     '''Wallet model for storing user wallet information'''

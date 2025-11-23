@@ -2,7 +2,7 @@ from typing import List
 from django.db import transaction
 from rest_framework import serializers
 
-from accounts.models import Restaurant, User
+from accounts.models import Restaurant, User, OperationalHours
 from api.models import Complaint, Dish, Order, OrderItem, Payment, Reservation, Table
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 
@@ -149,3 +149,42 @@ class OrderStatusUpdateSerializer(serializers.Serializer):
 
 class ReservationStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[("APPROVED", "APPROVED"), ("PENDING", "PENDING"), ("CANCELLED", "CANCELLED")])
+
+
+class OperationalHoursSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OperationalHours
+        fields = "__all__"
+
+
+class OperationalHoursCreateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OperationalHours
+        exclude = ("restaurant", "created_at", "updated_at")
+
+    def validate(self, attrs):
+        open_time = attrs.get('open_time')
+        close_time = attrs.get('close_time')
+        if open_time and close_time and close_time <= open_time:
+            raise serializers.ValidationError("close_time must be after open_time")
+        return attrs
+
+
+class OperationalHoursDaySerializer(serializers.Serializer):
+    day_of_week = serializers.ChoiceField(choices=[d for d, _ in OperationalHours.DAYS_OF_WEEK])
+    open_time = serializers.TimeField(required=False)
+    close_time = serializers.TimeField(required=False)
+    closed = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        closed = attrs.get('closed', False)
+        if not closed:
+            if not attrs.get('open_time') or not attrs.get('close_time'):
+                raise serializers.ValidationError("open_time and close_time are required when not closed")
+            if attrs['close_time'] <= attrs['open_time']:
+                raise serializers.ValidationError("close_time must be after open_time")
+        return attrs
+
+
+class OperationalHoursBatchUpsertSerializer(serializers.Serializer):
+    days = OperationalHoursDaySerializer(many=True)

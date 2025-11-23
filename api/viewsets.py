@@ -1,6 +1,6 @@
 from django.db import transaction
 from django.db.models import Q
-from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -9,7 +9,7 @@ from rest_framework.pagination import PageNumberPagination
 from django.conf import settings
 from decimal import Decimal
 
-from accounts.models import Restaurant
+from accounts.models import Restaurant, OperationalHours
 from agentic.services import IntentEngine
 from api.models import Complaint, Dish, Order, Payment, Reservation, Table
 from api.serializers import (
@@ -27,9 +27,17 @@ from api.serializers import (
 	TableCreateUpdateSerializer,
 	OrderStatusUpdateSerializer,
 	ReservationStatusUpdateSerializer,
+	OperationalHoursSerializer,
+	OperationalHoursCreateUpdateSerializer,
+    OperationalHoursBatchUpsertSerializer,
 )
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 from api.services import PaystackClient
+from typing import Dict
+
+# Day ordering for consistent Mon→Sun sorting
+DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+DAY_INDEX: Dict[str, int] = {d: i for i, d in enumerate(DAY_ORDER)}
 
 
 class MenuListAPI(APIView):
@@ -250,6 +258,7 @@ class ChatbotIntentAPI(APIView):
 
 	@extend_schema(
 		request=None,
+		parameters=[OpenApiParameter(name='message', type=OpenApiTypes.STR, required=True)],
 		responses={200: dict},
 		operation_id='chatbot_intent',
 		description='Classify user message with OpenAI into intents and return extracted entities.'
@@ -596,3 +605,160 @@ class RestaurantTableDetailAPI(APIView):
 			return error
 		table.delete()
 		return Response(status=204)
+
+
+class RestaurantOperationalHoursListCreateAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
+
+	@extend_schema(
+		responses={200: OperationalHoursSerializer(many=True)},
+		operation_id='restaurant_operational_hours_list',
+		description='List operational hours for the authenticated restaurant owner.',
+	)
+	def get(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+		qs = OperationalHours.objects.all()
+		if restaurant:
+			qs = qs.filter(restaurant=restaurant)
+		items = list(qs)
+		items.sort(key=lambda oh: DAY_INDEX.get(oh.day_of_week, 99))
+		return Response(OperationalHoursSerializer(items, many=True).data)
+
+	@extend_schema(
+		request=OperationalHoursCreateUpdateSerializer,
+		responses={200: OperationalHoursSerializer},
+		operation_id='restaurant_operational_hours_create',
+		examples=[
+			OpenApiExample(
+				'Create Monday Hours',
+				value={"day_of_week": "Monday", "open_time": "09:00:00", "close_time": "17:00:00"},
+			)
+		]
+	)
+	def post(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+		ser = OperationalHoursCreateUpdateSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		oh = OperationalHours.objects.create(restaurant=restaurant or Restaurant.objects.first(), **ser.validated_data)
+		return Response(OperationalHoursSerializer(oh).data)
+
+
+class RestaurantOperationalHoursDetailAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
+
+	def _get_obj(self, request, pk: int):
+		oh = OperationalHours.objects.filter(id=pk).first()
+		if not oh:
+			return None, Response({"message": "Operational hours not found"}, status=404)
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if restaurant and oh.restaurant_id != restaurant.id and not (request.user.is_staff or request.user.is_superuser):
+			return None, Response({"message": "Not authorized"}, status=403)
+		return oh, None
+
+	@extend_schema(responses={200: OperationalHoursSerializer}, operation_id='restaurant_operational_hours_retrieve')
+	def get(self, request, pk: int):
+		oh, error = self._get_obj(request, pk)
+		if error:
+			return error
+		return Response(OperationalHoursSerializer(oh).data)
+
+	@extend_schema(
+		request=OperationalHoursCreateUpdateSerializer,
+		responses={200: OperationalHoursSerializer},
+		operation_id='restaurant_operational_hours_update',
+		examples=[
+			OpenApiExample(
+				'Update Friday Hours',
+				value={"day_of_week": "Friday", "open_time": "10:00:00", "close_time": "18:00:00"},
+			)
+		]
+	)
+	def put(self, request, pk: int):
+		oh, error = self._get_obj(request, pk)
+		if error:
+			return error
+		ser = OperationalHoursCreateUpdateSerializer(oh, data=request.data)
+		ser.is_valid(raise_exception=True)
+		ser.save()
+		return Response(OperationalHoursSerializer(oh).data)
+
+	@extend_schema(
+		request=OperationalHoursCreateUpdateSerializer,
+		responses={200: OperationalHoursSerializer},
+		operation_id='restaurant_operational_hours_partial_update'
+	)
+	def patch(self, request, pk: int):
+		oh, error = self._get_obj(request, pk)
+		if error:
+			return error
+		ser = OperationalHoursCreateUpdateSerializer(oh, data=request.data, partial=True)
+		ser.is_valid(raise_exception=True)
+		ser.save()
+		return Response(OperationalHoursSerializer(oh).data)
+
+	@extend_schema(responses={204: None}, operation_id='restaurant_operational_hours_delete')
+	def delete(self, request, pk: int):
+		oh, error = self._get_obj(request, pk)
+		if error:
+			return error
+		oh.delete()
+		return Response(status=204)
+
+
+class RestaurantOperationalHoursBatchAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
+
+	@extend_schema(
+		request=OperationalHoursBatchUpsertSerializer,
+		responses={200: OperationalHoursSerializer(many=True)},
+		operation_id='restaurant_operational_hours_batch_upsert',
+		description='Batch upsert operational hours for the authenticated restaurant. Use closed=true to remove a day.',
+		examples=[
+			OpenApiExample(
+				'Upsert Full Week',
+				value={
+					"days": [
+						{"day_of_week": "Monday", "open_time": "09:00:00", "close_time": "17:00:00"},
+						{"day_of_week": "Tuesday", "open_time": "09:00:00", "close_time": "17:00:00"},
+						{"day_of_week": "Wednesday", "open_time": "09:00:00", "close_time": "17:00:00"},
+						{"day_of_week": "Thursday", "open_time": "09:00:00", "close_time": "17:00:00"},
+						{"day_of_week": "Friday", "open_time": "09:00:00", "close_time": "17:00:00"},
+						{"day_of_week": "Saturday", "open_time": "10:00:00", "close_time": "14:00:00"},
+						{"day_of_week": "Sunday", "closed": True}
+					]
+				}
+			)
+		]
+	)
+	@transaction.atomic
+	def post(self, request):
+		ser = OperationalHoursBatchUpsertSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant and not (request.user.is_staff or request.user.is_superuser):
+			return Response({"message": "Restaurant account required"}, status=403)
+
+		for item in ser.validated_data['days']:
+			day = item['day_of_week']
+			closed = item.get('closed', False)
+			if closed:
+				OperationalHours.objects.filter(restaurant=restaurant, day_of_week=day).delete()
+				continue
+			open_time = item['open_time']
+			close_time = item['close_time']
+			OperationalHours.objects.update_or_create(
+				restaurant=restaurant,
+				day_of_week=day,
+				defaults={"open_time": open_time, "close_time": close_time}
+			)
+
+		qs = list(OperationalHours.objects.filter(restaurant=restaurant))
+		qs.sort(key=lambda oh: DAY_INDEX.get(oh.day_of_week, 99))
+		return Response(OperationalHoursSerializer(qs, many=True).data)

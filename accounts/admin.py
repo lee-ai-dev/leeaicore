@@ -1,5 +1,5 @@
 from django.contrib import admin
-from accounts.models import User, Restaurant, Wallet, FCMDevice, OTP
+from accounts.models import User, Restaurant, Wallet, FCMDevice, OTP, OperationalHours
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -26,3 +26,9 @@ class FCMDeviceAdmin(admin.ModelAdmin):
 class OTPAdmin(admin.ModelAdmin):
 	list_display = ("id", "phone", "otp", "created_at")
 	search_fields = ("phone",)
+
+@admin.register(OperationalHours)
+class OperationalHoursAdmin(admin.ModelAdmin):
+	list_display = ("id", "restaurant", "day_of_week", "open_time", "close_time", "created_at")
+	list_filter = ("day_of_week", "restaurant")
+	search_fields = ("restaurant__name", "restaurant__rid")
