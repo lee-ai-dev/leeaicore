@@ -45,4 +45,11 @@ urlpatterns += [
     path('payments/intent/', vs.PaymentIntentAPI.as_view(), name='payment_intent'),
     path('payments/<str:ord_id>/confirm/', vs.PaymentConfirmAPI.as_view(), name='payment_confirm'),
     path('chatbot/intent/', vs.ChatbotIntentAPI.as_view(), name='chatbot_intent'),
+    # admin base endpoints
+    path('admin/restaurants/', vs.AdminRestaurantsAPI.as_view(), name='admin_restaurants'),
+    path('admin/orders/', vs.AdminOrdersAPI.as_view(), name='admin_orders'),
+    path('admin/reservations/', vs.AdminReservationsAPI.as_view(), name='admin_reservations'),
+    path('admin/tables/', vs.AdminTablesAPI.as_view(), name='admin_tables'),
+    path('admin/dishes/', vs.AdminDishesAPI.as_view(), name='admin_dishes'),
+    path('admin/payments/', vs.AdminPaymentsAPI.as_view(), name='admin_payments'),
 ]

@@ -10,6 +10,7 @@ from django.conf import settings
 from decimal import Decimal
 
 from accounts.models import Restaurant, OperationalHours
+from accounts.serializers import UserSerializer
 from agentic.services import IntentEngine
 from api.models import Complaint, Dish, Order, Payment, Reservation, Table
 from api.serializers import (
@@ -32,6 +33,7 @@ from api.serializers import (
     OperationalHoursBatchUpsertSerializer,
 )
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
+from leeaicore.sysutils.permissions import IsStaffAdmin
 from api.services import PaystackClient
 from typing import Dict
 
@@ -364,6 +366,157 @@ class RestaurantReservationsAPI(APIView):
 		paginator = PageNumberPagination()
 		page = paginator.paginate_queryset(qs, request)
 		data = ReservationSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
+
+
+class AdminRestaurantsAPI(APIView):
+	"""Admin: list all restaurants."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: UserSerializer(many=True)},
+		operation_id='admin_restaurants_list',
+		description='List all restaurants (admin only).'
+	)
+	def get(self, request):
+		qs = Restaurant.objects.select_related('user').all().order_by('name')
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		# Represent restaurants via their associated user object
+		users = [r.user for r in (page or qs) if r.user_id]
+		data = UserSerializer(users, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
+
+
+class AdminOrdersAPI(APIView):
+	"""Admin: list all orders with basic filtering."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		parameters=[
+			OpenApiParameter(name='status', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False),
+			OpenApiParameter(name='payment_status', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False),
+			OpenApiParameter(name='q', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False, description='Search by ord_id'),
+		],
+		responses={200: OrderSerializer(many=True)},
+		operation_id='admin_orders_list',
+		description='List all orders in the system (admin only).'
+	)
+	def get(self, request):
+		qs = Order.objects.all()
+		status_q = request.query_params.get('status')
+		if status_q:
+			qs = qs.filter(status__iexact=status_q)
+		payment_status = request.query_params.get('payment_status')
+		if payment_status:
+			qs = qs.filter(payment_status__iexact=payment_status)
+		q = request.query_params.get('q')
+		if q:
+			qs = qs.filter(ord_id__icontains=q)
+		qs = qs.order_by('-created_at')
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = OrderSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
+
+
+class AdminReservationsAPI(APIView):
+	"""Admin: list all reservations."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		parameters=[
+			OpenApiParameter(name='status', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False),
+		],
+		responses={200: ReservationSerializer(many=True)},
+		operation_id='admin_reservations_list',
+		description='List all reservations in the system (admin only).'
+	)
+	def get(self, request):
+		qs = Reservation.objects.all()
+		status_q = request.query_params.get('status')
+		if status_q:
+			qs = qs.filter(status__iexact=status_q)
+		qs = qs.order_by('-created_at')
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = ReservationSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
+
+
+class AdminTablesAPI(APIView):
+	"""Admin: list all tables."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: TableSerializer(many=True)},
+		operation_id='admin_tables_list',
+		description='List all tables in the system (admin only).'
+	)
+	def get(self, request):
+		qs = Table.objects.all().order_by('restaurant_id', 'name')
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = TableSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
+
+
+class AdminDishesAPI(APIView):
+	"""Admin: list all dishes."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: DishSerializer(many=True)},
+		operation_id='admin_dishes_list',
+		description='List all dishes in the system (admin only).'
+	)
+	def get(self, request):
+		qs = Dish.objects.all().order_by('restaurant_id', 'name')
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = DishSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
+
+
+class AdminPaymentsAPI(APIView):
+	"""Admin: list all payments."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		parameters=[
+			OpenApiParameter(name='status', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False),
+		],
+		responses={200: PaymentSerializer(many=True)},
+		operation_id='admin_payments_list',
+		description='List all payments in the system (admin only).'
+	)
+	def get(self, request):
+		qs = Payment.objects.all()
+		status_q = request.query_params.get('status')
+		if status_q:
+			qs = qs.filter(status__iexact=status_q)
+		qs = qs.order_by('-created_at')
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = PaymentSerializer(page or qs, many=True).data
 		if page is not None:
 			return paginator.get_paginated_response(data)
 		return Response(data)
