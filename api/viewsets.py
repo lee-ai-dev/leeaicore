@@ -163,7 +163,14 @@ class RestaurantCreateAPI(APIView):
 	def post(self, request):
 		ser = RestaurantCreateSerializer(data=request.data, context={"request": request})
 		ser.is_valid(raise_exception=True)
-		restaurant = ser.save()
+		if Restaurant.objects.filter(user=request.user).exists():
+			return Response({"message": "Restaurant profile already exists"}, status=400)
+
+		if request.user.is_staff or request.user.is_superuser:
+			# Staff can create multiple restaurants
+			restaurant = ser.save()
+		else:
+			restaurant = ser.save(user=request.user)
 		return Response(RestaurantProfileSerializer(restaurant).data, status=200)
 
 
