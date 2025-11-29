@@ -23,6 +23,7 @@ from api.serializers import (
 	PaymentIntentSerializer,
 	PaymentSerializer,
 	PlaceOrderSerializer,
+	ReadonlyReservationSerializer,
 	ReservationSerializer,
 	TableSerializer,
 	TableCreateUpdateSerializer,
@@ -31,6 +32,8 @@ from api.serializers import (
 	OperationalHoursSerializer,
 	OperationalHoursCreateUpdateSerializer,
     OperationalHoursBatchUpsertSerializer,
+    RestaurantCreateSerializer,
+    RestaurantProfileSerializer,
 )
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 from leeaicore.sysutils.permissions import IsStaffAdmin
@@ -107,12 +110,12 @@ class ReservationAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
 	throttle_scope = 'orders'
 
-	@extend_schema(responses={200: ReservationSerializer(many=True)}, operation_id='list_reservations')
+	@extend_schema(responses={200: ReadonlyReservationSerializer(many=True)}, operation_id='list_reservations')
 	def get(self, request):
 		qs = Reservation.objects.filter(user=request.user).order_by("-created_at")
 		paginator = PageNumberPagination()
 		page = paginator.paginate_queryset(qs, request)
-		data = ReservationSerializer(page or qs, many=True).data
+		data = ReadonlyReservationSerializer(page or qs, many=True).data
 		if page is not None:
 			return paginator.get_paginated_response(data)
 		return Response(data)
@@ -150,6 +153,30 @@ class ComplaintAPI(APIView):
 		ser.is_valid(raise_exception=True)
 		complaint = ser.save(user=request.user, status=ComplaintStatus.OPEN.value)
 		return Response(ComplaintSerializer(complaint).data, status=200)
+
+
+class RestaurantCreateAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
+
+	@extend_schema(request=RestaurantCreateSerializer, responses={200: RestaurantProfileSerializer}, operation_id='create_restaurant')
+	def post(self, request):
+		ser = RestaurantCreateSerializer(data=request.data, context={"request": request})
+		ser.is_valid(raise_exception=True)
+		restaurant = ser.save()
+		return Response(RestaurantProfileSerializer(restaurant).data, status=200)
+
+
+class RestaurantProfileAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
+
+	@extend_schema(responses={200: RestaurantProfileSerializer}, operation_id='restaurant_profile')
+	def get(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant:
+			return Response({"message": "Restaurant profile not found"}, status=404)
+		return Response(RestaurantProfileSerializer(restaurant).data, status=200)
 
 
 class PaymentIntentAPI(APIView):

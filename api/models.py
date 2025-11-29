@@ -94,6 +94,8 @@ class Reservation(TimeStampedModel):
     table = models.ForeignKey(Table, on_delete=models.CASCADE)
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    date = models.DateField(null=True, blank=True)
+    time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=[(s.value, s.value) for s in SS], default=SS.PENDING.value)
     
     def __str__(self):

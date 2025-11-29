@@ -26,6 +26,8 @@ urlpatterns += [
 
 # core restaurant features
 urlpatterns += [
+    path('restaurants/create/', vs.RestaurantCreateAPI.as_view(), name='restaurant_create'),
+    path('restaurants/profile/', vs.RestaurantProfileAPI.as_view(), name='restaurant_profile'),
     path('menu/', vs.MenuListAPI.as_view(), name='menu'),
     path('orders/place/', vs.PlaceOrderAPI.as_view(), name='place_order'),
     path('orders/<str:ord_id>/status/', vs.OrderStatusAPI.as_view(), name='order_status'),

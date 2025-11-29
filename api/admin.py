@@ -25,7 +25,7 @@ class TableAdmin(admin.ModelAdmin):
 
 @admin.register(Reservation)
 class ReservationAdmin(admin.ModelAdmin):
-	list_display = ("id", "table", "restaurant", "user", "status", "created_at")
+	list_display = ("id", "table", "restaurant", "user", "status", 'date', 'time', "created_at")
 	list_filter = ("status", "restaurant")
 
 @admin.register(Payment)

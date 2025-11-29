@@ -3,11 +3,51 @@ from django.db import transaction
 from rest_framework import serializers
 
 from accounts.models import Restaurant, User, OperationalHours
+from accounts.serializers import UserSerializer
 from api.models import Complaint, Dish, Order, OrderItem, Payment, Reservation, Table
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 
 
+
+class RestaurantCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Restaurant
+        fields = (
+            "name",
+            "phone",
+            "whatsapp",
+            "instagram",
+            "facebook",
+            "twitter",
+            "bank_account_number",
+            "bank_name",
+            "bank_code",
+            "bank_branch",
+            "website",
+        )
+
+    def create(self, validated_data):
+        user = self.context["request"].user
+        # Ensure a user can only own one restaurant
+        if Restaurant.objects.filter(user=user).exists():
+            raise serializers.ValidationError("User already has a restaurant")
+        restaurant = Restaurant.objects.create(user=user, **validated_data)
+        # Optionally set role to RESTAURANT
+        if getattr(user, "role", None) != "RESTAURANT":
+            user.role = "RESTAURANT"
+            user.save(update_fields=["role"])
+        return restaurant
+
+
+class RestaurantProfileSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = Restaurant
+        fields = "__all__"
+
 class DishSerializer(serializers.ModelSerializer):
+    restaurant = RestaurantProfileSerializer(read_only=True)
     class Meta:
         model = Dish
         fields = "__all__"
@@ -114,8 +154,18 @@ class TableCreateUpdateSerializer(serializers.ModelSerializer):
 class ReservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
-        fields = ("id", "table", "restaurant", "user", "status", "created_at", "updated_at")
+        fields = ("id", "table", "restaurant", "user", "status", 'date', 'time', "created_at", "updated_at")
         read_only_fields = ("status", "user")
+
+class ReadonlyReservationSerializer(serializers.ModelSerializer):
+    table = TableSerializer(read_only=True)
+    restaurant = RestaurantProfileSerializer(read_only=True)
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Reservation
+        fields = ("id", "table", "restaurant", "user", "status", 'date', 'time', "created_at", "updated_at")
+        read_only_fields = ("status", "user", "table", "restaurant")
 
 
 class ComplaintSerializer(serializers.ModelSerializer):
@@ -188,3 +238,4 @@ class OperationalHoursDaySerializer(serializers.Serializer):
 
 class OperationalHoursBatchUpsertSerializer(serializers.Serializer):
     days = OperationalHoursDaySerializer(many=True)
+
