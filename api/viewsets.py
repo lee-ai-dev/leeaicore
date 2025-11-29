@@ -174,6 +174,21 @@ class RestaurantCreateAPI(APIView):
 		return Response(RestaurantProfileSerializer(restaurant).data, status=200)
 
 
+class RestaurantUpdateAPI(APIView):
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
+
+	@extend_schema(request=RestaurantProfileSerializer, responses={200: RestaurantProfileSerializer}, operation_id='update_restaurant')
+	def put(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant:
+			return Response({"message": "Restaurant profile not found"}, status=404)
+
+		ser = RestaurantProfileSerializer(restaurant, data=request.data, partial=True)
+		ser.is_valid(raise_exception=True)
+		ser.save()
+		return Response(RestaurantProfileSerializer(restaurant).data, status=200)
+
 class RestaurantProfileAPI(APIView):
 	permission_classes = (permissions.IsAuthenticated,)
 	throttle_scope = 'restaurant'
