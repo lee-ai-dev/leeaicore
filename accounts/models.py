@@ -87,6 +87,7 @@ class Restaurant(TimeStampedModel):
     bank_name = models.CharField(max_length=255, blank=True, null=True)
     bank_code = models.CharField(max_length=50, blank=True, null=True)
     bank_branch = models.CharField(max_length=255, blank=True, null=True)
+    withdrawal_pin = models.CharField(max_length=512, blank=True, null=True)
     website = models.URLField(blank=True, max_length=100)
 
     def __str__(self):

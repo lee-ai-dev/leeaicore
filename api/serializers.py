@@ -40,7 +40,7 @@ class RestaurantCreateSerializer(serializers.ModelSerializer):
 
 
 class RestaurantProfileSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    user = UserSerializer(read_only=True)
 
     class Meta:
         model = Restaurant
@@ -161,6 +161,7 @@ class ReadonlyReservationSerializer(serializers.ModelSerializer):
     table = TableSerializer(read_only=True)
     restaurant = RestaurantProfileSerializer(read_only=True)
     user = UserSerializer(read_only=True)
+    user_name = serializers.CharField(source='user.name', read_only=True)
 
     class Meta:
         model = Reservation

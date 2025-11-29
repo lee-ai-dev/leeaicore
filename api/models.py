@@ -100,6 +100,7 @@ class Reservation(TimeStampedModel):
     
     def __str__(self):
         return f"RSV (Table {self.table.table_id}): {self.status}"
+    
 
 
 # Keep order total in sync with items through m2m changes
