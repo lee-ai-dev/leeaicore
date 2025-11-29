@@ -38,7 +38,8 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'django_filters',
 
-    # root app // to is so that management commands work from root app
+    # root app 
+    # to is so that management commands work from root app
     'leeaicore',
 
 ]

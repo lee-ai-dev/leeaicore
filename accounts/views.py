@@ -202,12 +202,25 @@ class LogoutAPIView(APIView):
 
     @extend_schema(responses={200: SimpleStatusSerializer}, operation_id='logout')
     def post(self, request, *args, **kwargs):
-        '''Logout user'''
-        request.user.auth_token.delete()
-        return Response({
-            "status": "success",
-            "message": "User logged out successfully",
-        }, status=status.HTTP_200_OK)
+        '''Logout user by invalidating their Knox token(s).'''
+        # Try to delete just the token used for this request
+        token = getattr(request, 'auth', None) or getattr(request, '_auth', None)
+        if token is not None:
+            try:
+                token.delete()
+            except Exception:
+                pass
+        else:
+            # Fallback: delete all tokens for this user
+            AuthToken.objects.filter(user=request.user).delete()
+
+        return Response(
+            {
+                "status": "success",
+                "message": "User logged out successfully",
+            },
+            status=status.HTTP_200_OK,
+        )
     
 
 class VerifyOTPAPI(APIView):
