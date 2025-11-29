@@ -38,6 +38,9 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'django_filters',
 
+    # root app
+    'leeaicore',
+
 ]
 
 MIDDLEWARE = [
