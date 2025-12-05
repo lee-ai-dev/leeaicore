@@ -126,6 +126,19 @@ class Payment(TimeStampedModel):
         return f"{self.provider} {self.status} {self.amount}{self.currency} for {self.order.ord_id}"
 
 
+class PaymentRefund(TimeStampedModel):
+    payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="refunds")
+    user = models.ForeignKey(User, on_delete=models.PROTECT, help_text="User who received the refund")
+    initiated_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="initiated_refunds")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, default='PENDING')
+    provider_reference = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return f"Refund {self.amount}{self.payment.currency} for {self.payment.order.ord_id} ({self.status})"
+
+
 class Complaint(TimeStampedModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     restaurant = models.ForeignKey(Restaurant, on_delete=models.SET_NULL, blank=True, null=True)

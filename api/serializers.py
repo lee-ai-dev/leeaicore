@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from accounts.models import Restaurant, User, OperationalHours
 from accounts.serializers import UserSerializer
-from api.models import Complaint, Dish, Order, OrderItem, Payment, Reservation, Table
+from api.models import Complaint, Dish, Order, OrderItem, Payment, PaymentRefund, Reservation, Table
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 
 
@@ -188,10 +188,36 @@ class PaymentConfirmSerializer(serializers.Serializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.name', read_only=True)
+    restaurant_name = serializers.CharField(source='order.restaurant.name', read_only=True)
     class Meta:
         model = Payment
         fields = "__all__"
-        read_only_fields = ("status", "amount", "currency", "user")
+        read_only_fields = ("status", "amount", "currency", "user", "user_name", "restaurant_name", "created_at")
+
+
+class PaymentRefundSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentRefund
+        fields = ("id", "payment", "user", "initiated_by", "amount", "reason", "status", "provider_reference", "created_at")
+        read_only_fields = ("initiated_by", "status", "provider_reference", "created_at")
+
+    def validate(self, attrs):
+        payment: Payment = attrs.get("payment")
+        amount = attrs.get("amount")
+        if payment is None:
+            raise serializers.ValidationError("payment is required")
+			
+        if payment.status != PaymentStatus.SUCCEEDED.value:
+            raise serializers.ValidationError("Only successful payments can be refunded")
+			
+        # Prevent refunding more than paid (consider existing refunds)
+        total_refunded = PaymentRefund.objects.filter(payment=payment, status__in=["PENDING", "COMPLETED"]).aggregate(total=serializers.DecimalField(max_digits=12, decimal_places=2).to_internal_value("0"))
+        # Simpler: sum in Python
+        existing = sum(r.amount for r in PaymentRefund.objects.filter(payment=payment, status__in=["PENDING", "COMPLETED"]))
+        if amount + existing > payment.amount:
+            raise serializers.ValidationError("Refund amount exceeds original payment amount")
+        return attrs
 
 
 class OrderStatusUpdateSerializer(serializers.Serializer):

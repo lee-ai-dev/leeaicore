@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum, Count
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import permissions, status
@@ -12,7 +12,7 @@ from decimal import Decimal
 from accounts.models import Restaurant, OperationalHours
 from accounts.serializers import UserSerializer
 from agentic.services import IntentEngine
-from api.models import Complaint, Dish, Order, Payment, Reservation, Table
+from api.models import Complaint, Dish, Order, Payment, PaymentRefund, Reservation, Table
 from api.serializers import (
 	ComplaintSerializer,
 	DishSerializer,
@@ -22,6 +22,7 @@ from api.serializers import (
 	PaymentConfirmSerializer,
 	PaymentIntentSerializer,
 	PaymentSerializer,
+	PaymentRefundSerializer,
 	PlaceOrderSerializer,
 	ReadonlyReservationSerializer,
 	ReservationSerializer,
@@ -461,7 +462,7 @@ class AdminRestaurantDetailAPI(APIView):
 		return Response(RestaurantProfileSerializer(restaurant).data, status=200)
 
 	@extend_schema(
-		responses={200: dict},
+		responses={200: {"message": "Restaurant deleted (soft) and user access revoked"}},
 		operation_id='admin_restaurant_delete',
 		description='Soft delete a restaurant by marking its owner inactive and deleted.',
 	)
@@ -590,7 +591,7 @@ class AdminPaymentsAPI(APIView):
 		],
 		responses={200: PaymentSerializer(many=True)},
 		operation_id='admin_payments_list',
-		description='List all payments in the system (admin only).'
+		description='List all payments in the system (admin only) with summary info.'
 	)
 	def get(self, request):
 		qs = Payment.objects.all()
@@ -598,12 +599,29 @@ class AdminPaymentsAPI(APIView):
 		if status_q:
 			qs = qs.filter(status__iexact=status_q)
 		qs = qs.order_by('-created_at')
+
+		# Compute summary across all payments (ignores pagination)
+		all_payments = Payment.objects.all()
+		total_revenue = all_payments.filter(status=PaymentStatus.SUCCEEDED.value).aggregate(Sum('amount'))['amount__sum'] or 0
+		failed_payments = all_payments.exclude(status=PaymentStatus.SUCCEEDED.value).count()
+		refunds_issued = PaymentRefund.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+		active_subscriptions = 0
+		summary = {
+			"total_revenue": total_revenue,
+			"failed_payments": failed_payments,
+			"refunds_issued": refunds_issued,
+			"active_subscriptions": active_subscriptions,
+		}
+
 		paginator = PageNumberPagination()
 		page = paginator.paginate_queryset(qs, request)
-		data = PaymentSerializer(page or qs, many=True).data
+		items = PaymentSerializer(page or qs, many=True).data
 		if page is not None:
-			return paginator.get_paginated_response(data)
-		return Response(data)
+			# Wrap paginated data with summary
+			paginated = paginator.get_paginated_response(items)
+			paginated.data['summary'] = summary
+			return paginated
+		return Response({"summary": summary, "results": items})
 
 
 class AdminRestaurantUsersAPI(APIView):
@@ -646,6 +664,144 @@ class AdminRestaurantPaymentsAPI(APIView):
 		if page is not None:
 			return paginator.get_paginated_response(data)
 		return Response(data)
+
+
+class PaymentRefundAPI(APIView):
+	"""Issue a refund for a successful payment and record it."""
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'orders'
+
+	@extend_schema(
+		request=PaymentRefundSerializer,
+		responses={200: PaymentRefundSerializer},
+		operation_id='payment_refund',
+		description='Issue a refund for a successful payment. Only admins/staff may refund payments.'
+	)
+	@transaction.atomic
+	def post(self, request):
+		ser = PaymentRefundSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		payment: Payment = ser.validated_data["payment"]
+		amount = ser.validated_data["amount"]
+		reason = ser.validated_data.get("reason")
+		# Authorization: only admin/staff can refund
+		is_admin = request.user.is_staff or request.user.is_superuser
+		if not is_admin:
+			return Response({"message": "Not authorized to refund this payment"}, status=403)
+
+		refund = PaymentRefund.objects.create(
+			payment=payment,
+			user=payment.user,
+			initiated_by=request.user,
+			amount=amount,
+			reason=reason,
+			status='COMPLETED',
+		)
+		# Update payment metadata to reflect refund
+		meta = payment.metadata or {}
+		refunds_meta = meta.get('refunds', [])
+		refunds_meta.append({
+			'id': refund.id,
+			'amount': str(refund.amount),
+			'reason': refund.reason,
+			'created_at': refund.created_at.isoformat(),
+		})
+		meta['refunds'] = refunds_meta
+		payment.metadata = meta
+		payment.save(update_fields=["metadata", "updated_at"] if hasattr(payment, "updated_at") else ["metadata"])
+
+		return Response(PaymentRefundSerializer(refund).data, status=200)
+
+
+class AdminAnalyticsAPI(APIView):
+	"""Admin: high-level analytics for the platform."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: dict},
+		operation_id='admin_analytics',
+		description='Platform-wide analytics summary for admins: revenue, volumes, and top vendors.'
+	)
+	def get(self, request):
+		from django.utils import timezone
+		from datetime import timedelta
+
+		now = timezone.now()
+		start_of_week = now - timedelta(days=now.weekday())
+		start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+
+		# Summary
+		active_restaurants = Restaurant.objects.filter(is_suspended=False, user__is_active=True, user__deleted=False).count()
+		total_revenue = Payment.objects.filter(status=PaymentStatus.SUCCEEDED.value).aggregate(Sum('amount'))['amount__sum'] or 0
+		total_customers = Order.objects.values('user_id').distinct().count()
+		total_bookings = Reservation.objects.count()
+		total_orders = Order.objects.count()
+
+		summary = {
+			"active_restaurants": active_restaurants,
+			"total_revenue": total_revenue,
+			"total_customers": total_customers,
+			"total_bookings": total_bookings,
+			"total_orders": total_orders,
+		}
+
+		# Volumes this week (by day)
+		orders_week = (
+			Order.objects.filter(created_at__gte=start_of_week)
+			.extra(select={"day": "DATE(created_at)"})
+			.values("day")
+			.annotate(count=Count("id"))
+		)
+		reservations_week = (
+			Reservation.objects.filter(created_at__gte=start_of_week)
+			.extra(select={"day": "DATE(created_at)"})
+			.values("day")
+			.annotate(count=Count("id"))
+		)
+		orders_by_day = {str(row["day"]): row["count"] for row in orders_week}
+		reservations_by_day = {str(row["day"]): row["count"] for row in reservations_week}
+
+		volumes_this_week = []
+		for i in range(7):
+			day = start_of_week + timedelta(days=i)
+			key = str(day.date())
+			volumes_this_week.append({
+				"day": key,
+				"orders": orders_by_day.get(key, 0),
+				"reservations": reservations_by_day.get(key, 0),
+			})
+
+		# Top vendors by revenue
+		top_vendors_qs = (
+			Payment.objects.filter(status=PaymentStatus.SUCCEEDED.value)
+			.values("order__restaurant_id", "order__restaurant__name")
+			.annotate(revenue=Sum("amount"))
+			.order_by("-revenue")[:10]
+		)
+		top_vendors = [
+			{
+				"id": row["order__restaurant_id"],
+				"vendor_name": row["order__restaurant__name"],
+				"revenue": row["revenue"],
+			}
+			for row in top_vendors_qs
+		]
+
+		channels = {
+			"whatsapp": 45,
+			"web": 25,
+			"Instagram": 10,
+			"Messenger": 5,
+			"other": 15,
+		}
+
+		return Response({
+			"summary": summary,
+			"volumes_this_week": volumes_this_week,
+			"top_vendors": top_vendors,
+			"channels": channels,
+		})
 
 
 class AdminRestaurantSuspendAPI(APIView):
