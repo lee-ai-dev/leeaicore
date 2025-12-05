@@ -89,6 +89,8 @@ class Restaurant(TimeStampedModel):
     bank_branch = models.CharField(max_length=255, blank=True, null=True)
     withdrawal_pin = models.CharField(max_length=512, blank=True, null=True)
     website = models.URLField(blank=True, max_length=100)
+    is_suspended = models.BooleanField(default=False)
+    suspension_reason = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name

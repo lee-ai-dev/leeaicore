@@ -50,6 +50,11 @@ urlpatterns += [
     path('chatbot/intent/', vs.ChatbotIntentAPI.as_view(), name='chatbot_intent'),
     # admin base endpoints
     path('admin/restaurants/', vs.AdminRestaurantsAPI.as_view(), name='admin_restaurants'),
+    path('admin/restaurants/<int:pk>/', vs.AdminRestaurantDetailAPI.as_view(), name='admin_restaurant_detail'),
+    path('admin/restaurants/<int:pk>/users/', vs.AdminRestaurantUsersAPI.as_view(), name='admin_restaurant_users'),
+    path('admin/restaurants/<int:pk>/payments/', vs.AdminRestaurantPaymentsAPI.as_view(), name='admin_restaurant_payments'),
+    path('admin/restaurants/<int:pk>/suspend/', vs.AdminRestaurantSuspendAPI.as_view(), name='admin_restaurant_suspend'),
+    path('admin/restaurants/<int:pk>/unsuspend/', vs.AdminRestaurantUnsuspendAPI.as_view(), name='admin_restaurant_unsuspend'),
     path('admin/orders/', vs.AdminOrdersAPI.as_view(), name='admin_orders'),
     path('admin/reservations/', vs.AdminReservationsAPI.as_view(), name='admin_reservations'),
     path('admin/tables/', vs.AdminTablesAPI.as_view(), name='admin_tables'),

@@ -165,7 +165,7 @@ class ReadonlyReservationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reservation
-        fields = ("id", "table", "restaurant", "user", "status", 'date', 'time', "created_at", "updated_at")
+        fields = ("id", "table", "restaurant", "user","user_name", "status", 'date', 'time', "created_at", "updated_at")
         read_only_fields = ("status", "user", "table", "restaurant")
 
 
@@ -239,4 +239,15 @@ class OperationalHoursDaySerializer(serializers.Serializer):
 
 class OperationalHoursBatchUpsertSerializer(serializers.Serializer):
     days = OperationalHoursDaySerializer(many=True)
+
+
+class AdminRestaurantUserSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ("id", "name", "email", "role", "status")
+
+    def get_status(self, obj):
+        return "active" if obj.is_active else "inactive"
 

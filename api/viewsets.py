@@ -34,11 +34,13 @@ from api.serializers import (
     OperationalHoursBatchUpsertSerializer,
     RestaurantCreateSerializer,
     RestaurantProfileSerializer,
+	AdminRestaurantUserSerializer,
 )
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 from leeaicore.sysutils.permissions import IsStaffAdmin
 from api.services import PaystackClient
 from typing import Dict
+from knox.models import AuthToken
 
 # Day ordering for consistent Mon→Sun sorting
 DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -442,6 +444,39 @@ class AdminRestaurantsAPI(APIView):
 		return Response(data)
 
 
+class AdminRestaurantDetailAPI(APIView):
+	"""Admin: retrieve a single restaurant by id."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: RestaurantProfileSerializer},
+		operation_id='admin_restaurant_detail',
+		description='Retrieve detailed information for a single restaurant (admin only).'
+	)
+	def get(self, request, pk: int):
+		restaurant = Restaurant.objects.select_related('user').filter(id=pk).first()
+		if not restaurant:
+			return Response({"message": "Restaurant not found"}, status=404)
+		return Response(RestaurantProfileSerializer(restaurant).data, status=200)
+
+	@extend_schema(
+		responses={200: dict},
+		operation_id='admin_restaurant_delete',
+		description='Soft delete a restaurant by marking its owner inactive and deleted.',
+	)
+	def delete(self, request, pk: int):
+		restaurant = Restaurant.objects.select_related('user').filter(id=pk).first()
+		if not restaurant:
+			return Response({"message": "Restaurant not found"}, status=404)
+		user = restaurant.user
+		user.deleted = True
+		user.is_active = False
+		user.save(update_fields=["deleted", "is_active", "updated_at"] if hasattr(user, "updated_at") else ["deleted", "is_active"])
+		AuthToken.objects.filter(user=user).delete()
+		return Response({"message": "Restaurant deleted (soft) and user access revoked"}, status=200)
+
+
 class AdminOrdersAPI(APIView):
 	"""Admin: list all orders with basic filtering."""
 	permission_classes = (IsStaffAdmin,)
@@ -569,6 +604,100 @@ class AdminPaymentsAPI(APIView):
 		if page is not None:
 			return paginator.get_paginated_response(data)
 		return Response(data)
+
+
+class AdminRestaurantUsersAPI(APIView):
+	"""Admin: list users associated with a restaurant (currently owner only)."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: AdminRestaurantUserSerializer(many=True)},
+		operation_id='admin_restaurant_users',
+		description='List users associated with the restaurant (owner user for now).'
+	)
+	def get(self, request, pk: int):
+		restaurant = Restaurant.objects.select_related('user').filter(id=pk).first()
+		if not restaurant:
+			return Response({"message": "Restaurant not found"}, status=404)
+		users = [restaurant.user]
+		data = AdminRestaurantUserSerializer(users, many=True).data
+		return Response(data, status=200)
+
+
+class AdminRestaurantPaymentsAPI(APIView):
+	"""Admin: list payments associated with a restaurant."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: PaymentSerializer(many=True)},
+		operation_id='admin_restaurant_payments',
+		description='List all payments associated with a given restaurant (admin only).'
+	)
+	def get(self, request, pk: int):
+		restaurant = Restaurant.objects.filter(id=pk).first()
+		if not restaurant:
+			return Response({"message": "Restaurant not found"}, status=404)
+		qs = Payment.objects.filter(order__restaurant=restaurant).order_by('-created_at')
+		paginator = PageNumberPagination()
+		page = paginator.paginate_queryset(qs, request)
+		data = PaymentSerializer(page or qs, many=True).data
+		if page is not None:
+			return paginator.get_paginated_response(data)
+		return Response(data)
+
+
+class AdminRestaurantSuspendAPI(APIView):
+	"""Admin: suspend or unsuspend a restaurant's owner account."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		request=OpenApiTypes.OBJECT,
+		responses={200: dict},
+		operation_id='admin_restaurant_suspend',
+		description='Suspend a restaurant by disabling its owner user and revoking tokens. Expects a JSON body with "reason".',
+	)
+	def post(self, request, pk: int):
+		restaurant = Restaurant.objects.select_related('user').filter(id=pk).first()
+		if not restaurant:
+			return Response({"message": "Restaurant not found"}, status=404)
+		reason = (request.data or {}).get('reason') or ''
+		user = restaurant.user
+		user.is_active = False
+		user.save(update_fields=["is_active", "updated_at"] if hasattr(user, "updated_at") else ["is_active"])
+		restaurant.is_suspended = True
+		restaurant.suspension_reason = reason
+		restaurant.save(update_fields=["is_suspended", "suspension_reason", "updated_at"] if hasattr(restaurant, "updated_at") else ["is_suspended", "suspension_reason"])
+		AuthToken.objects.filter(user=user).delete()
+		return Response({"message": "Restaurant suspended and user tokens revoked", "reason": reason}, status=200)
+
+
+class AdminRestaurantUnsuspendAPI(APIView):
+	"""Admin: unsuspend a restaurant's owner account."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		request=None,
+		responses={200: dict},
+		operation_id='admin_restaurant_unsuspend',
+		description='Unsuspend a restaurant by re-enabling its owner user (if not deleted).',
+	)
+	def post(self, request, pk: int):
+		restaurant = Restaurant.objects.select_related('user').filter(id=pk).first()
+		if not restaurant:
+			return Response({"message": "Restaurant not found"}, status=404)
+		user = restaurant.user
+		if getattr(user, 'deleted', False):
+			return Response({"message": "Cannot unsuspend a deleted user"}, status=400)
+		user.is_active = True
+		user.save(update_fields=["is_active", "updated_at"] if hasattr(user, "updated_at") else ["is_active"])
+		restaurant.is_suspended = False
+		restaurant.suspension_reason = None
+		restaurant.save(update_fields=["is_suspended", "suspension_reason", "updated_at"] if hasattr(restaurant, "updated_at") else ["is_suspended", "suspension_reason"])
+		return Response({"message": "Restaurant unsuspended and user re-enabled"}, status=200)
 
 
 class RestaurantOrderUpdateAPI(APIView):
