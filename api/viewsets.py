@@ -719,9 +719,40 @@ class AdminAnalyticsAPI(APIView):
 	throttle_scope = 'admin'
 
 	@extend_schema(
-		responses={200: dict},
+		responses={
+			200: OpenApiTypes.OBJECT,
+		},
 		operation_id='admin_analytics',
-		description='Platform-wide analytics summary for admins: revenue, volumes, and top vendors.'
+		description='Platform-wide analytics summary for admins: revenue, volumes, top vendors, and channel distribution.',
+		examples=[
+			OpenApiExample(
+				'AdminAnalyticsExample',
+				value={
+					"summary": {
+						"active_restaurants": 12,
+						"total_revenue": "12345.67",
+						"total_customers": 340,
+						"total_bookings": 210,
+						"total_orders": 580,
+					},
+					"volumes_this_week": [
+						{"day": "2025-12-01", "weekday": "Mon", "orders": 25, "reservations": 10},
+						{"day": "2025-12-02", "weekday": "Tue", "orders": 30, "reservations": 8},
+					],
+					"top_vendors": [
+						{"id": 1, "vendor_name": "Pizza Palace", "revenue": "4500.00"},
+						{"id": 2, "vendor_name": "Sushi Corner", "revenue": "3200.00"},
+					],
+					"channels": {
+						"whatsapp": 45,
+						"web": 25,
+						"Instagram": 10,
+						"Messenger": 5,
+						"other": 15,
+					},
+				},
+			),
+		],
 	)
 	def get(self, request):
 		from django.utils import timezone
@@ -768,6 +799,7 @@ class AdminAnalyticsAPI(APIView):
 			key = str(day.date())
 			volumes_this_week.append({
 				"day": key,
+				"weekday": day.strftime('%a'),
 				"orders": orders_by_day.get(key, 0),
 				"reservations": reservations_by_day.get(key, 0),
 			})
