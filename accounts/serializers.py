@@ -129,8 +129,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'email', 'phone', 'name', 'address', 'avatar',
-            'preferred_notification_email', 'preferred_notification_phone'
+			'email', 'phone', 'name', 'address', 'avatar',
+			'preferred_notification_email', 'preferred_notification_phone',
+			'profile_registration_status',
         )
         extra_kwargs = {field: {"required": False} for field in fields}
 
