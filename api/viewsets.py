@@ -1101,6 +1101,11 @@ class AdminAnalyticsAPI(APIView):
 						"total_customers": 340,
 						"total_bookings": 210,
 						"total_orders": 580,
+						"active_subscriptions": 9,
+						"pending_refund_requests": 3,
+						"total_users": 150,
+						"total_reservations": 220,
+						"total_customers": 340,
 					},
 					"volumes_this_week": [
 						{"day": "2025-12-01", "weekday": "Mon", "orders": 25, "reservations": 10},
@@ -1131,17 +1136,23 @@ class AdminAnalyticsAPI(APIView):
 
 		# Summary
 		active_restaurants = Restaurant.objects.filter(is_suspended=False, user__is_active=True, user__deleted=False).count()
-		total_revenue = Payment.objects.filter(status=PaymentStatus.SUCCEEDED.value).aggregate(Sum('amount'))['amount__sum'] or 0
-		total_customers = Order.objects.values('user_id').distinct().count()
-		total_bookings = Reservation.objects.count()
+		total_users = Restaurant.objects.values('user_id').distinct().count()
 		total_orders = Order.objects.count()
+		total_reservations = Reservation.objects.count()
+		total_revenue_processed = Payment.objects.filter(status=PaymentStatus.SUCCEEDED.value).aggregate(Sum('amount'))['amount__sum'] or 0
+		active_subscriptions = Subscription.objects.filter(status='ACTIVE').count()
+		pending_refund_requests = PaymentRefund.objects.filter(status='PENDING').count()
+		total_customers = Order.objects.values('user_id').distinct().count()
 
 		summary = {
 			"active_restaurants": active_restaurants,
-			"total_revenue": total_revenue,
-			"total_customers": total_customers,
-			"total_bookings": total_bookings,
+			"total_users": total_users,
 			"total_orders": total_orders,
+			"total_reservations": total_reservations,
+			"total_revenue_processed": total_revenue_processed,
+			"active_subscriptions": active_subscriptions,
+			"pending_refund_requests": pending_refund_requests,
+			"total_customers": total_customers,
 		}
 
 		# Volumes this week (by day)
