@@ -7,12 +7,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from django.conf import settings
+import hmac
+import hashlib
 from decimal import Decimal
 
 from accounts.models import Restaurant, OperationalHours
 from accounts.serializers import UserSerializer
 from agentic.services import IntentEngine
-from api.models import Complaint, Dish, Order, Payment, PaymentRefund, Reservation, Table
+from api.models import Complaint, Dish, Order, Payment, PaymentRefund, Reservation, Table, SubscriptionPackage, Subscription
 from api.serializers import (
 	ComplaintSerializer,
 	DishSerializer,
@@ -36,10 +38,12 @@ from api.serializers import (
     RestaurantCreateSerializer,
     RestaurantProfileSerializer,
 	AdminRestaurantUserSerializer,
+	SubscriptionPackageSerializer,
+	SubscriptionSerializer,
 )
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 from leeaicore.sysutils.permissions import IsStaffAdmin
-from api.services import PaystackClient
+from api.services import PaystackClient, enforce_subscription_limit
 from typing import Dict
 from knox.models import AuthToken
 
@@ -87,6 +91,15 @@ class PlaceOrderAPI(APIView):
 	def post(self, request):
 		ser = PlaceOrderSerializer(data=request.data, context={"request": request})
 		ser.is_valid(raise_exception=True)
+		# Enforce subscription order limit for the restaurant
+		from accounts.models import Restaurant as RestaurantModel
+		from api.models import Order as OrderModel
+		restaurant = RestaurantModel.objects.get(rid=ser.validated_data["restaurant_rid"])
+		current_orders = OrderModel.objects.filter(restaurant=restaurant).count()
+		try:
+			enforce_subscription_limit(restaurant, kind='orders', current_count=current_orders)
+		except ValueError as e:
+			return Response({"message": str(e)}, status=403)
 		order = ser.save()
 		return Response(OrderSerializer(order).data, status=status.HTTP_200_OK)
 
@@ -133,6 +146,13 @@ class ReservationAPI(APIView):
 		restaurant = ser.validated_data["restaurant"]
 		if not table.available:
 			return Response({"message": "Table not available"}, status=400)
+		# Enforce subscription reservation limit
+		from api.models import Reservation as ReservationModel
+		current_reservations = ReservationModel.objects.filter(restaurant=restaurant).count()
+		try:
+			enforce_subscription_limit(restaurant, kind='reservations', current_count=current_reservations)
+		except ValueError as e:
+			return Response({"message": str(e)}, status=403)
 
 		reservation = Reservation.objects.create(
 			table=table,
@@ -713,6 +733,226 @@ class PaymentRefundAPI(APIView):
 		return Response(PaymentRefundSerializer(refund).data, status=200)
 
 
+class AdminSubscriptionPackageAPI(APIView):
+	"""Admin: manage subscription packages/plans."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: SubscriptionPackageSerializer(many=True)},
+		operation_id='admin_subscription_packages_list',
+		description='List all subscription packages.'
+	)
+	def get(self, request):
+		qs = SubscriptionPackage.objects.all().order_by('price')
+		return Response(SubscriptionPackageSerializer(qs, many=True).data)
+
+	@extend_schema(
+		request=SubscriptionPackageSerializer,
+		responses={201: SubscriptionPackageSerializer},
+		operation_id='admin_subscription_packages_create',
+		description='Create a new subscription package.'
+	)
+	def post(self, request):
+		ser = SubscriptionPackageSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		pkg = ser.save()
+		return Response(SubscriptionPackageSerializer(pkg).data, status=201)
+
+
+class AdminSubscriptionsAPI(APIView):
+	"""Admin: list all subscriptions."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: SubscriptionSerializer(many=True)},
+		operation_id='admin_subscriptions_list',
+		description='List all restaurant subscriptions.'
+	)
+	def get(self, request):
+		qs = Subscription.objects.select_related('restaurant', 'package').all().order_by('-created_at')
+		return Response(SubscriptionSerializer(qs, many=True).data)
+
+
+class RestaurantSubscriptionAPI(APIView):
+	"""Restaurant: subscribe to a package and initialize Paystack payment."""
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
+
+	@extend_schema(
+		request=SubscriptionSerializer,
+		responses={200: dict},
+		operation_id='restaurant_subscribe',
+		description='Subscribe the authenticated restaurant to a package and initialize Paystack payment.'
+	)
+	@transaction.atomic
+	def post(self, request):
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant:
+			return Response({"message": "Restaurant profile not found"}, status=404)
+
+		ser = SubscriptionSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		package: SubscriptionPackage = ser.validated_data['package']
+
+		# Initialize Paystack transaction for subscription
+		client = PaystackClient()
+		amount_minor = int((package.price * 100).quantize(Decimal('1')))
+		ref = f"sub_{restaurant.id}_{package.id}"
+		init_data = client.initialize(
+			email=request.user.email or f"user{request.user.id}@example.com",
+			amount_minor=amount_minor,
+			reference=ref,
+			currency=package.currency or 'GHS',
+		)
+
+		sub = Subscription.objects.create(
+			restaurant=restaurant,
+			package=package,
+			status='ACTIVE',
+			paystack_reference=init_data.get('reference') or ref,
+		)
+
+		return Response({
+			"subscription": SubscriptionSerializer(sub).data,
+			"paystack": {
+				"authorization_url": init_data.get('authorization_url'),
+				"access_code": init_data.get('access_code'),
+				"reference": init_data.get('reference') or ref,
+			},
+		})
+
+
+class SubscriptionConfirmAPI(APIView):
+	"""Confirm a subscription payment via Paystack and finalize the subscription."""
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'restaurant'
+
+	@extend_schema(
+		request=None,
+		responses={200: SubscriptionSerializer},
+		operation_id='subscription_confirm',
+		description='Confirm a Paystack subscription payment using a reference and activate the subscription.',
+		parameters=[
+			OpenApiParameter(name='reference', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=True),
+		],
+	)
+	@transaction.atomic
+	def post(self, request):
+		ref = request.query_params.get('reference')
+		if not ref:
+			return Response({"message": "reference is required"}, status=400)
+
+		restaurant = Restaurant.objects.filter(user=request.user).first()
+		if not restaurant:
+			return Response({"message": "Restaurant profile not found"}, status=404)
+
+		sub = Subscription.objects.filter(restaurant=restaurant, paystack_reference=ref).order_by('-created_at').first()
+		if not sub:
+			return Response({"message": "Subscription not found for this reference"}, status=404)
+		# Prevent multiple activations or changes on non-pending subscriptions
+		if sub.status == 'ACTIVE':
+			return Response({"message": "Subscription already active"}, status=400)
+		if sub.status == 'CANCELLED':
+			return Response({"message": "Subscription is cancelled"}, status=400)
+
+		client = PaystackClient()
+		verify = client.verify(ref)
+		status_str = (verify.get('status') or '').lower()
+		if status_str != 'success':
+			return Response({'message': 'Subscription payment not successful'}, status=400)
+
+		# Set dates based on actual Paystack payment timestamp to ensure idempotency
+		from django.utils.dateparse import parse_datetime
+		from django.utils import timezone
+		from datetime import timedelta
+		paid_at_str = verify.get('paid_at') or verify.get('transaction_date')
+		paid_at = parse_datetime(paid_at_str) if paid_at_str else timezone.now()
+		if timezone.is_naive(paid_at):
+			paid_at = timezone.make_aware(paid_at, timezone.get_current_timezone())
+		paid_at = timezone.localtime(paid_at)
+		start_date = paid_at.date()
+		end_date = start_date + timedelta(days=30)
+
+		sub.status = 'ACTIVE'
+		sub.start_date = start_date
+		sub.end_date = end_date
+		sub.save(update_fields=['status', 'start_date', 'end_date', 'updated_at'])
+
+		return Response(SubscriptionSerializer(sub).data, status=200)
+
+
+class PaystackWebhookAPI(APIView):
+	"""Handle Paystack webhooks for payments and subscriptions."""
+	permission_classes = (permissions.AllowAny,)
+	throttle_scope = 'orders'
+
+	@extend_schema(
+		request=None,
+		responses={200: dict},
+		operation_id='paystack_webhook',
+		description='Paystack webhook endpoint to process payment and subscription events.',
+	)
+	def post(self, request):
+		# Validate Paystack signature
+		signature = request.headers.get('X-Paystack-Signature') or request.META.get('HTTP_X_PAYSTACK_SIGNATURE')
+		if not signature:
+			return Response({"message": "Missing Paystack signature"}, status=400)
+
+		secret = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
+		body_bytes = request.body or b''
+		computed = hmac.new(secret.encode('utf-8'), body_bytes, hashlib.sha512).hexdigest()
+		if not hmac.compare_digest(computed, signature):
+			return Response({"message": "Invalid signature"}, status=400)
+
+		event = request.data.get('event')
+		data = request.data.get('data') or {}
+		if not event or not data:
+			return Response({"message": "Invalid payload"}, status=400)
+
+		ref = data.get('reference') or data.get('reference_code')
+		if not ref:
+			return Response({"message": "Missing reference in payload"}, status=400)
+
+		# Handle successful charge events
+		if event == 'charge.success':
+			status_str = (data.get('status') or '').lower()
+			if status_str == 'success':
+				# First, try to match a normal Payment
+				payment = Payment.objects.filter(transaction_id=ref).first() or Payment.objects.filter(metadata__reference=ref).first()
+				if payment and payment.status != PaymentStatus.SUCCEEDED.value:
+					payment.status = PaymentStatus.SUCCEEDED.value
+					payment.transaction_id = ref
+					payment.save(update_fields=["status", "transaction_id", "updated_at"])
+					order = payment.order
+					order.payment_status = "Paid"
+					order.status = OrderStatus.CONFIRMED.value
+					order.save(update_fields=["payment_status", "status", "updated_at"])
+
+				# Then, try to match a Subscription
+				from api.models import Subscription as SubscriptionModel
+				sub = SubscriptionModel.objects.filter(paystack_reference=ref).order_by('-created_at').first()
+				if sub and sub.status != 'ACTIVE':
+					# Reuse the same date logic as SubscriptionConfirmAPI
+					from django.utils.dateparse import parse_datetime
+					from django.utils import timezone
+					from datetime import timedelta
+					paid_at_str = data.get('paid_at') or data.get('transaction_date')
+					paid_at = parse_datetime(paid_at_str) if paid_at_str else timezone.now()
+					if timezone.is_naive(paid_at):
+						paid_at = timezone.make_aware(paid_at, timezone.get_current_timezone())
+					paid_at = timezone.localtime(paid_at)
+					start_date = paid_at.date()
+					end_date = start_date + timedelta(days=30)
+					sub.status = 'ACTIVE'
+					sub.start_date = start_date
+					sub.end_date = end_date
+					sub.save(update_fields=['status', 'start_date', 'end_date', 'updated_at'])
+
+		return Response({"message": "ok"}, status=200)
+
+
 class AdminAnalyticsAPI(APIView):
 	"""Admin: high-level analytics for the platform."""
 	permission_classes = (IsStaffAdmin,)
@@ -993,6 +1233,13 @@ class RestaurantDishListCreateAPI(APIView):
 			return Response({"message": "Restaurant account required"}, status=403)
 		ser = DishCreateUpdateSerializer(data=request.data)
 		ser.is_valid(raise_exception=True)
+		# Enforce subscription dish limit (only for non-staff restaurant accounts)
+		if restaurant and not (request.user.is_staff or request.user.is_superuser):
+			current_dishes = Dish.objects.filter(restaurant=restaurant).count()
+			try:
+				enforce_subscription_limit(restaurant, kind='dishes', current_count=current_dishes)
+			except ValueError as e:
+				return Response({"message": str(e)}, status=403)
 		dish = Dish.objects.create(restaurant=restaurant or Restaurant.objects.first(), **ser.validated_data)
 		return Response(DishSerializer(dish).data)
 
@@ -1073,6 +1320,13 @@ class RestaurantTableListCreateAPI(APIView):
 			return Response({"message": "Restaurant account required"}, status=403)
 		ser = TableCreateUpdateSerializer(data=request.data)
 		ser.is_valid(raise_exception=True)
+		# Enforce subscription table limit (only for non-staff restaurant accounts)
+		if restaurant and not (request.user.is_staff or request.user.is_superuser):
+			current_tables = Table.objects.filter(restaurant=restaurant).count()
+			try:
+				enforce_subscription_limit(restaurant, kind='tables', current_count=current_tables)
+			except ValueError as e:
+				return Response({"message": str(e)}, status=403)
 		table = Table.objects.create(restaurant=restaurant or Restaurant.objects.first(), **ser.validated_data)
 		return Response(TableSerializer(table).data)
 

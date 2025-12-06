@@ -139,6 +139,39 @@ class PaymentRefund(TimeStampedModel):
         return f"Refund {self.amount}{self.payment.currency} for {self.payment.order.ord_id} ({self.status})"
 
 
+class SubscriptionPackage(TimeStampedModel):
+    """Subscription package/plan definition for restaurants."""
+    name = models.CharField(max_length=100, unique=True)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=5, default='GHC')
+    max_dishes = models.PositiveIntegerField()
+    max_tables = models.PositiveIntegerField()
+    max_orders = models.PositiveIntegerField()
+    max_reservations = models.PositiveIntegerField()
+
+    def __str__(self):
+        return f"{self.name} ({self.price}{self.currency})"
+
+
+class Subscription(TimeStampedModel):
+    """Subscription of a restaurant to a package."""
+    STATUS_CHOICES = [
+        ('ACTIVE', 'ACTIVE'),
+        ('EXPIRED', 'EXPIRED'),
+        ('CANCELLED', 'CANCELLED'),
+    ]
+
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='subscriptions')
+    package = models.ForeignKey(SubscriptionPackage, on_delete=models.PROTECT, related_name='subscriptions')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    start_date = models.DateField(auto_now_add=True)
+    end_date = models.DateField(null=True, blank=True)
+    paystack_reference = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.restaurant.name} -> {self.package.name} ({self.status})"
+
+
 class Complaint(TimeStampedModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     restaurant = models.ForeignKey(Restaurant, on_delete=models.SET_NULL, blank=True, null=True)

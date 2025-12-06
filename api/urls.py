@@ -48,6 +48,12 @@ urlpatterns += [
     path('payments/intent/', vs.PaymentIntentAPI.as_view(), name='payment_intent'),
     path('payments/<str:ord_id>/confirm/', vs.PaymentConfirmAPI.as_view(), name='payment_confirm'),
     path('payments/refund/', vs.PaymentRefundAPI.as_view(), name='payment_refund'),
+    path('payments/paystack/webhook/', vs.PaystackWebhookAPI.as_view(), name='paystack_webhook'),
+    # subscriptions
+    path('subscriptions/packages/', vs.AdminSubscriptionPackageAPI.as_view(), name='admin_subscription_packages'),
+    path('subscriptions/admin/', vs.AdminSubscriptionsAPI.as_view(), name='admin_subscriptions'),
+    path('subscriptions/subscribe/', vs.RestaurantSubscriptionAPI.as_view(), name='restaurant_subscribe'),
+    path('subscriptions/confirm/', vs.SubscriptionConfirmAPI.as_view(), name='subscription_confirm'),
     path('chatbot/intent/', vs.ChatbotIntentAPI.as_view(), name='chatbot_intent'),
     # admin base endpoints
     path('admin/restaurants/', vs.AdminRestaurantsAPI.as_view(), name='admin_restaurants'),

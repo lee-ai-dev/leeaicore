@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from accounts.models import Restaurant, User, OperationalHours
 from accounts.serializers import UserSerializer
-from api.models import Complaint, Dish, Order, OrderItem, Payment, PaymentRefund, Reservation, Table
+from api.models import Complaint, Dish, Order, OrderItem, Payment, PaymentRefund, Reservation, Table, SubscriptionPackage, Subscription
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 
 
@@ -218,6 +218,46 @@ class PaymentRefundSerializer(serializers.ModelSerializer):
         if amount + existing > payment.amount:
             raise serializers.ValidationError("Refund amount exceeds original payment amount")
         return attrs
+
+
+class SubscriptionPackageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubscriptionPackage
+        fields = (
+            "id",
+            "name",
+            "price",
+            "currency",
+            "max_dishes",
+            "max_tables",
+            "max_orders",
+            "max_reservations",
+            "created_at",
+            "updated_at",
+        )
+
+
+class SubscriptionSerializer(serializers.ModelSerializer):
+    package = SubscriptionPackageSerializer(read_only=True)
+    package_id = serializers.PrimaryKeyRelatedField(
+        queryset=SubscriptionPackage.objects.all(), write_only=True, source="package"
+    )
+
+    class Meta:
+        model = Subscription
+        fields = (
+            "id",
+            "restaurant",
+            "package",
+            "package_id",
+            "status",
+            "start_date",
+            "end_date",
+            "paystack_reference",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("restaurant", "status", "start_date", "end_date", "paystack_reference")
 
 
 class OrderStatusUpdateSerializer(serializers.Serializer):

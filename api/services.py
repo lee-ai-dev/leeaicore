@@ -38,3 +38,37 @@ class PaystackClient:
             message = data.get('message') or 'Paystack verification failed'
             raise ValueError(message)
         return data['data']  # contains status etc.
+
+
+def get_active_subscription(restaurant):
+    """Return the active subscription for a restaurant, if any."""
+    from api.models import Subscription
+    return Subscription.objects.filter(restaurant=restaurant, status='ACTIVE').order_by('-end_date').first()
+
+
+def enforce_subscription_limit(restaurant, *, kind: str, current_count: int):
+    """Enforce subscription limits for a restaurant.
+
+    kind: 'dishes' | 'tables' | 'orders' | 'reservations'
+    Raises ValueError if the limit is exceeded or no active subscription exists.
+    """
+    sub = get_active_subscription(restaurant)
+    if not sub:
+        raise ValueError('No active subscription')
+
+    package = sub.package
+    if kind == 'dishes':
+        limit = package.max_dishes
+    elif kind == 'tables':
+        limit = package.max_tables
+    elif kind == 'orders':
+        limit = package.max_orders
+    elif kind == 'reservations':
+        limit = package.max_reservations
+    else:
+        raise ValueError('Unknown subscription limit type')
+
+    if current_count >= limit:
+        raise ValueError(f'Subscription limit reached for {kind}')
+
+    return sub
