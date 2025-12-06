@@ -60,6 +60,7 @@ urlpatterns += [
     path('admin/restaurants/<int:pk>/', vs.AdminRestaurantDetailAPI.as_view(), name='admin_restaurant_detail'),
     path('admin/restaurants/<int:pk>/users/', vs.AdminRestaurantUsersAPI.as_view(), name='admin_restaurant_users'),
     path('admin/restaurants/<int:pk>/payments/', vs.AdminRestaurantPaymentsAPI.as_view(), name='admin_restaurant_payments'),
+    path('admin/restaurants/<int:pk>/subscriptions/', vs.AdminRestaurantSubscriptionsAPI.as_view(), name='admin_restaurant_subscriptions'),
     path('admin/restaurants/<int:pk>/suspend/', vs.AdminRestaurantSuspendAPI.as_view(), name='admin_restaurant_suspend'),
     path('admin/restaurants/<int:pk>/unsuspend/', vs.AdminRestaurantUnsuspendAPI.as_view(), name='admin_restaurant_unsuspend'),
     path('admin/orders/', vs.AdminOrdersAPI.as_view(), name='admin_orders'),

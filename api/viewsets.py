@@ -38,6 +38,7 @@ from api.serializers import (
     RestaurantCreateSerializer,
     RestaurantProfileSerializer,
 	AdminRestaurantUserSerializer,
+	AdminRestaurantListSerializer,
 	SubscriptionPackageSerializer,
 	SubscriptionSerializer,
 )
@@ -449,17 +450,15 @@ class AdminRestaurantsAPI(APIView):
 	throttle_scope = 'admin'
 
 	@extend_schema(
-		responses={200: UserSerializer(many=True)},
+		responses={200: AdminRestaurantListSerializer(many=True)},
 		operation_id='admin_restaurants_list',
-		description='List all restaurants (admin only).'
+		description='List all restaurants (admin only), including owner user info and latest subscription.'
 	)
 	def get(self, request):
-		qs = Restaurant.objects.select_related('user').all().order_by('name')
+		qs = Restaurant.objects.select_related('user').prefetch_related('subscriptions', 'subscriptions__package').all().order_by('name')
 		paginator = PageNumberPagination()
 		page = paginator.paginate_queryset(qs, request)
-		# Represent restaurants via their associated user object
-		users = [r.user for r in (page or qs) if r.user_id]
-		data = UserSerializer(users, many=True).data
+		data = AdminRestaurantListSerializer(page or qs, many=True).data
 		if page is not None:
 			return paginator.get_paginated_response(data)
 		return Response(data)
@@ -684,6 +683,134 @@ class AdminRestaurantPaymentsAPI(APIView):
 		if page is not None:
 			return paginator.get_paginated_response(data)
 		return Response(data)
+
+
+class AdminRestaurantSubscriptionsAPI(APIView):
+	"""Admin: list subscriptions for a single restaurant with summary."""
+	permission_classes = (IsStaffAdmin,)
+	throttle_scope = 'admin'
+
+	@extend_schema(
+		responses={200: OpenApiTypes.OBJECT},
+		operation_id='admin_restaurant_subscriptions',
+		description='List subscriptions for a restaurant (admin only), with a billing summary.',
+		examples=[
+			OpenApiExample(
+				'AdminRestaurantSubscriptionsExample',
+				value={
+					"summary": {
+						"next_billing_date": "2025-12-31",
+						"monthly_amount": "199.99",
+						"outstanding_balance": "80.00",
+						"last_payment": {
+							"amount": "199.99",
+							"currency": "GHC",
+							"transaction_reference": "sub_42_3_ABC123",
+							"start_date": "2025-12-01",
+							"end_date": "2025-12-31",
+							"status": "ACTIVE",
+						},
+					},
+					"results": [
+						{
+							"name": "Pro Plan",
+							"start_date": "2025-12-01",
+							"end_date": "2025-12-31",
+							"transaction_reference": "sub_42_3_ABC123",
+							"amount": "199.99",
+							"currency": "GHC",
+							"payment_status": "ACTIVE",
+						}
+					],
+				},
+			),
+		],
+	)
+	def get(self, request, pk: int):
+		from datetime import timedelta
+		from django.utils import timezone
+
+		restaurant = Restaurant.objects.filter(id=pk).first()
+		if not restaurant:
+			return Response({"message": "Restaurant not found"}, status=404)
+
+		qs = Subscription.objects.filter(restaurant=restaurant).select_related('package').order_by('-start_date', '-created_at')
+		subs_data = []
+		for sub in qs:
+			amount = sub.package.price if sub.package else None
+			currency = sub.package.currency if sub.package else None
+			subs_data.append({
+				"name": sub.package.name if sub.package else None,
+				"start_date": sub.start_date,
+				"end_date": sub.end_date,
+				"transaction_reference": sub.paystack_reference,
+				"amount": amount,
+				"currency": currency,
+				"payment_status": sub.status,
+			})
+
+		# Build summary based on the most recent subscription
+		latest = qs.first()
+		summary = {
+			"next_billing_date": None,
+			"monthly_amount": None,
+			"outstanding_balance": None,
+			"last_payment": None,
+		}
+		if latest and latest.package:
+			monthly_amount = latest.package.price
+			currency = latest.package.currency
+			start_date = latest.start_date
+			end_date = latest.end_date
+			# If end_date is missing, assume a 30-day period from start_date
+			if not end_date and start_date:
+				end_date = start_date + timedelta(days=30)
+				next_billing_date = end_date
+			elif end_date:
+				next_billing_date = end_date
+			else:
+				next_billing_date = None
+
+			# Outstanding balance based on days used vs left in current period
+			outstanding_balance = None
+			if start_date and end_date and latest.status == 'ACTIVE':
+				period_days = (end_date - start_date).days or 1
+				# Use current local date for usage calculation
+				today = timezone.localdate()
+				if today < start_date:
+					used_days = 0
+				elif today >= end_date:
+					used_days = period_days
+				else:
+					used_days = (today - start_date).days
+				days_left = max(period_days - used_days, 0)
+				# daily rate * days_left
+				if period_days > 0:
+					# monthly_amount is Decimal, keep precision
+					from decimal import Decimal, ROUND_HALF_UP
+					daily_rate = (monthly_amount / Decimal(period_days)) if period_days else Decimal('0')
+					outstanding_balance = (daily_rate * days_left).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+			last_payment = {
+				"amount": monthly_amount,
+				"currency": currency,
+				"transaction_reference": latest.paystack_reference,
+				"start_date": start_date,
+				"end_date": end_date,
+				"status": latest.status,
+			}
+
+			summary.update({
+				"next_billing_date": next_billing_date,
+				"monthly_amount": monthly_amount,
+				"outstanding_balance": outstanding_balance,
+				"last_payment": last_payment,
+			})
+
+		return Response({
+			"summary": summary,
+			"results": subs_data,
+		})
 
 
 class PaymentRefundAPI(APIView):

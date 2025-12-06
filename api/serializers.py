@@ -317,3 +317,41 @@ class AdminRestaurantUserSerializer(serializers.ModelSerializer):
     def get_status(self, obj):
         return "active" if obj.is_active else "inactive"
 
+
+class AdminRestaurantListSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
+    user_name = serializers.CharField(source='user.name', read_only=True)
+    user_role = serializers.CharField(source='user.role', read_only=True)
+    subscription_name = serializers.SerializerMethodField()
+    subscription_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Restaurant
+        fields = (
+            "id",
+            "name",
+            "rid",
+            "phone",
+            "whatsapp",
+            "instagram",
+            "facebook",
+            "website",
+            "is_suspended",
+            "suspension_reason",
+            "created_at",
+            "updated_at",
+            "user_id",
+            "user_name",
+            "user_role",
+            "subscription_name",
+            "subscription_status",
+        )
+
+    def get_subscription_name(self, obj):
+        sub = obj.subscriptions.order_by('-created_at').first()
+        return sub.package.name if sub and sub.package else None
+
+    def get_subscription_status(self, obj):
+        sub = obj.subscriptions.order_by('-created_at').first()
+        return sub.status if sub else None
+
