@@ -214,6 +214,24 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'LEE AI CORE API',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'EXTENSIONS_INFO': [
+        {
+            'name': 'WebSocket Endpoints',
+            'description': (
+                "This API also exposes WebSocket endpoints (not directly callable via Swagger UI) "
+                "for real-time updates to restaurant owners. Connect using a WebSocket client "
+                "with your Knox token in the query string, for example:\n\n"
+                "- ws://<host>/ws/restaurant/orders/?token=<KNOX_TOKEN> — receive events when orders "
+                "are created or updated for the authenticated restaurant.\n"
+                "- ws://<host>/ws/restaurant/reservations/?token=<KNOX_TOKEN> — receive events when "
+                "reservations are created or updated.\n"
+                "- ws://<host>/ws/restaurant/payments/?token=<KNOX_TOKEN> — receive payment and refund "
+                "events.\n\n"
+                "Each message is a small JSON payload containing an event `type` (e.g. 'order', 'reservation', "
+                "'payment', 'refund') and related fields such as IDs, statuses, and amounts."
+            ),
+        },
+    ],
 }
 
 # OpenAI settings (optional; features will gracefully degrade without a key)

@@ -51,6 +51,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
 
     phone_verified = models.BooleanField(default=False)
     email_verified = models.BooleanField(default=False)
+    profile_registration_status = models.CharField(max_length=20, default='INCOMPLETE')
 
     # preferences
     preferred_notification_email = models.EmailField(max_length=50, blank=True, null=True)
