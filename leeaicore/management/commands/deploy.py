@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
-    help = "Deploy current branch: git pull, migrate, collectstatic, restart lee service"
+    help = "Deploy current branch: git pull, migrate, collectstatic, reload services (gunicorn + daphne)"
 
     def handle(self, *args, **options):
         steps = [
@@ -12,8 +12,12 @@ class Command(BaseCommand):
             ["python", "manage.py", "migrate"],
             ["python", "manage.py", "collectstatic", "--noinput"],
             ["sudo", "systemctl", "daemon-reload"],
-            ["sudo", "systemctl", "enable", "--now", "lee"],
-            ["sudo", "systemctl", "restart", "lee"],
+            # Restart nginx web server
+            ["sudo", "systemctl", "restart", "nginx"],
+            # Enable and restart Daphne ASGI service for WebSockets
+            ["sudo", "systemctl", "enable", "--now", "leeaicore-daphne"],
+            ["sudo", "systemctl", "start", "leeaicore-daphne"],
+            ["sudo", "systemctl", "restart", "leeaicore-daphne"],
         ]
 
         for cmd in steps:
