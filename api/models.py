@@ -7,6 +7,8 @@ from leeaicore.sysutils.models import TimeStampedModel
 from django.db import IntegrityError
 from django.db.models.signals import m2m_changed
 from django.dispatch import receiver
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from leeaicore.sysutils.constants import OrderStatus, PaymentStatus, ComplaintStatus
 
 
@@ -88,6 +90,27 @@ class Order(TimeStampedModel):
                 self.ord_id = generate_order_id()
                 return self.save(*args, retries=retries - 1, **kwargs)
             raise
+
+@receiver(models.signals.post_save, sender=Order)
+def order_realtime_broadcast(sender, instance: Order, created, **kwargs):
+    """Broadcast order create/update events to restaurant WebSocket group."""
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        return
+    group_name = f"restaurant_orders_{instance.restaurant_id}"
+    payload = {
+        "type": "order",  # event type
+        "id": instance.id,
+        "ord_id": instance.ord_id,
+        "status": instance.status,
+        "payment_status": instance.payment_status,
+        "restaurant_id": instance.restaurant_id,
+        "created": created,
+    }
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {"type": "restaurant_order_event", "payload": payload},
+    )
     
 class Reservation(TimeStampedModel):
     '''model for storing table reservations'''
@@ -100,6 +123,26 @@ class Reservation(TimeStampedModel):
     
     def __str__(self):
         return f"RSV (Table {self.table.table_id}): {self.status}"
+
+@receiver(models.signals.post_save, sender=Reservation)
+def reservation_realtime_broadcast(sender, instance: Reservation, created, **kwargs):
+    """Broadcast reservation create/update events to restaurant WebSocket group."""
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        return
+    group_name = f"restaurant_reservations_{instance.restaurant_id}"
+    payload = {
+        "type": "reservation",
+        "id": instance.id,
+        "status": instance.status,
+        "restaurant_id": instance.restaurant_id,
+        "table_id": instance.table_id,
+        "created": created,
+    }
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {"type": "restaurant_reservation_event", "payload": payload},
+    )
     
 
 
@@ -125,6 +168,31 @@ class Payment(TimeStampedModel):
     def __str__(self):
         return f"{self.provider} {self.status} {self.amount}{self.currency} for {self.order.ord_id}"
 
+@receiver(models.signals.post_save, sender=Payment)
+def payment_realtime_broadcast(sender, instance: Payment, created, **kwargs):
+    """Broadcast payment create/update events to restaurant WebSocket group."""
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        return
+    try:
+        restaurant_id = instance.order.restaurant_id
+    except Exception:
+        return
+    group_name = f"restaurant_payments_{restaurant_id}"
+    payload = {
+        "type": "payment",
+        "id": instance.id,
+        "order_id": instance.order_id,
+        "status": instance.status,
+        "amount": str(instance.amount),
+        "currency": instance.currency,
+        "created": created,
+    }
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {"type": "restaurant_payment_event", "payload": payload},
+    )
+
 
 class PaymentRefund(TimeStampedModel):
     payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="refunds")
@@ -137,6 +205,31 @@ class PaymentRefund(TimeStampedModel):
 
     def __str__(self):
         return f"Refund {self.amount}{self.payment.currency} for {self.payment.order.ord_id} ({self.status})"
+
+@receiver(models.signals.post_save, sender=PaymentRefund)
+def payment_refund_realtime_broadcast(sender, instance: PaymentRefund, created, **kwargs):
+    """Broadcast refund create/update events to restaurant WebSocket group."""
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        return
+    try:
+        restaurant_id = instance.payment.order.restaurant_id
+    except Exception:
+        return
+    group_name = f"restaurant_payments_{restaurant_id}"
+    payload = {
+        "type": "refund",
+        "id": instance.id,
+        "payment_id": instance.payment_id,
+        "status": instance.status,
+        "amount": str(instance.amount),
+        "currency": instance.payment.currency,
+        "created": created,
+    }
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {"type": "restaurant_payment_event", "payload": payload},
+    )
 
 
 class SubscriptionPackage(TimeStampedModel):

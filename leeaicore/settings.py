@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'knox',
     'drf_spectacular',
     'django_filters',
+	'channels',
 
     # root app 
     # to is so that management commands work from root app
@@ -73,6 +74,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'leeaicore.wsgi.application'
+ASGI_APPLICATION = 'leeaicore.asgi.application'
+
+# In-memory channel layer by default; swap to Redis in production
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    }
+}
 
 
 # Database
