@@ -1,4 +1,5 @@
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from channels.db import database_sync_to_async
 from knox.models import AuthToken
 from django.contrib.auth import get_user_model
 from accounts.models import Restaurant
@@ -19,7 +20,7 @@ class KnoxTokenAuthMixin:
         if not token:
             return None
         try:
-            auth_token = AuthToken.objects.select_related("user").get(token_key=token[:8])
+            auth_token = await self._get_auth_token(token)
         except AuthToken.DoesNotExist:
             return None
         user = auth_token.user
@@ -27,6 +28,10 @@ class KnoxTokenAuthMixin:
             return None
         self.scope["user"] = user
         return user
+
+    @database_sync_to_async
+    def _get_auth_token(self, token):
+        return AuthToken.objects.select_related("user").get(token_key=token[:8])
 
 
 class RestaurantBaseConsumer(KnoxTokenAuthMixin, AsyncJsonWebsocketConsumer):
@@ -56,17 +61,16 @@ class RestaurantBaseConsumer(KnoxTokenAuthMixin, AsyncJsonWebsocketConsumer):
 
     async def _get_restaurant_for_user(self, user):
         try:
-            return await self._database_sync_to_async(Restaurant.objects.filter(user=user).first)()
+            return await self._get_restaurant_for_user_sync(user)
         except Exception:
             return None
 
     async def _get_group_name(self):
         raise NotImplementedError
 
-    async def _database_sync_to_async(self, func, *args, **kwargs):
-        from asgiref.sync import sync_to_async
-
-        return await sync_to_async(func, thread_sensitive=True)(*args, **kwargs)
+    @database_sync_to_async
+    def _get_restaurant_for_user_sync(self, user):
+        return Restaurant.objects.filter(user=user).first()
 
 
 class RestaurantOrdersConsumer(RestaurantBaseConsumer):
