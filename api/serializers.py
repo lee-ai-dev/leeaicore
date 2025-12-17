@@ -27,7 +27,8 @@ class RestaurantCreateSerializer(serializers.ModelSerializer):
         )
 
     def create(self, validated_data):
-        user = self.context["request"].user
+        # Allow passing user via serializer.save(user=...), otherwise use request user.
+        user = validated_data.pop("user", None) or self.context["request"].user
         # Ensure a user can only own one restaurant
         if Restaurant.objects.filter(user=user).exists():
             raise serializers.ValidationError("User already has a restaurant")
