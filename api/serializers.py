@@ -355,3 +355,23 @@ class AdminRestaurantListSerializer(serializers.ModelSerializer):
         sub = obj.subscriptions.order_by('-created_at').first()
         return sub.status if sub else None
 
+
+class BankSerializer(serializers.Serializer):
+    """Shape of a single bank item as returned by Paystack /bank."""
+
+    name = serializers.CharField()
+    slug = serializers.CharField(required=False, allow_blank=True)
+    code = serializers.CharField(required=False, allow_blank=True)
+    longcode = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    gateway = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    pay_with_bank = serializers.BooleanField(required=False)
+    active = serializers.BooleanField(required=False)
+    country = serializers.CharField(required=False, allow_blank=True)
+    currency = serializers.CharField(required=False, allow_blank=True)
+    type = serializers.CharField(required=False, allow_blank=True)
+
+
+class BanksListResponseSerializer(serializers.Serializer):
+    provider = serializers.CharField()
+    banks = BankSerializer(many=True)
+

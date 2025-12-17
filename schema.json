@@ -1,0 +1,3454 @@
+openapi: 3.0.3
+info:
+  title: LEE AI API
+  version: 1.0.0
+  description: LEE AI CORE API
+paths:
+  /api-v1/admin/analytics/:
+    get:
+      operationId: admin_analytics
+      description: 'Platform-wide analytics summary for admins: revenue, volumes,
+        top vendors, and channel distribution.'
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                AdminAnalyticsExample:
+                  value:
+                    summary:
+                      active_restaurants: 12
+                      total_revenue: '12345.67'
+                      total_customers: 340
+                      total_bookings: 210
+                      total_orders: 580
+                      active_subscriptions: 9
+                      pending_refund_requests: 3
+                      total_users: 150
+                      total_reservations: 220
+                    volumes_this_week:
+                    - day: '2025-12-01'
+                      weekday: Mon
+                      orders: 25
+                      reservations: 10
+                    - day: '2025-12-02'
+                      weekday: Tue
+                      orders: 30
+                      reservations: 8
+                    top_vendors:
+                    - id: 1
+                      vendor_name: Pizza Palace
+                      revenue: '4500.00'
+                    - id: 2
+                      vendor_name: Sushi Corner
+                      revenue: '3200.00'
+                    channels:
+                      whatsapp: 45
+                      web: 25
+                      Instagram: 10
+                      Messenger: 5
+                      other: 15
+          description: ''
+  /api-v1/admin/dishes/:
+    get:
+      operationId: admin_dishes_list
+      description: List all dishes in the system (admin only).
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Dish'
+          description: ''
+  /api-v1/admin/orders/:
+    get:
+      operationId: admin_orders_list
+      description: List all orders in the system (admin only).
+      parameters:
+      - in: query
+        name: payment_status
+        schema:
+          type: string
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Search by ord_id
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+          description: ''
+  /api-v1/admin/payments/:
+    get:
+      operationId: admin_payments_list
+      description: List all payments in the system (admin only) with summary info.
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+          description: ''
+  /api-v1/admin/reservations/:
+    get:
+      operationId: admin_reservations_list
+      description: List all reservations in the system (admin only).
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api-v1/admin/restaurants/:
+    get:
+      operationId: admin_restaurants_list
+      description: List all restaurants (admin only), including owner user info and
+        latest subscription.
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminRestaurantList'
+          description: ''
+  /api-v1/admin/restaurants/{id}/:
+    get:
+      operationId: admin_restaurant_detail
+      description: Retrieve detailed information for a single restaurant (admin only).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantProfile'
+          description: ''
+    delete:
+      operationId: admin_restaurant_delete
+      description: Soft delete a restaurant by marking its owner inactive and deleted.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                message: Restaurant deleted (soft) and user access revoked
+          description: ''
+  /api-v1/admin/restaurants/{id}/payments/:
+    get:
+      operationId: admin_restaurant_payments
+      description: List all payments associated with a given restaurant (admin only).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+          description: ''
+  /api-v1/admin/restaurants/{id}/subscriptions/:
+    get:
+      operationId: admin_restaurant_subscriptions
+      description: List subscriptions for a restaurant (admin only), with a billing
+        summary.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                AdminRestaurantSubscriptionsExample:
+                  value:
+                    summary:
+                      next_billing_date: '2025-12-31'
+                      monthly_amount: '199.99'
+                      outstanding_balance: '80.00'
+                      last_payment:
+                        amount: '199.99'
+                        currency: GHC
+                        transaction_reference: sub_42_3_ABC123
+                        start_date: '2025-12-01'
+                        end_date: '2025-12-31'
+                        status: ACTIVE
+                    results:
+                    - name: Pro Plan
+                      start_date: '2025-12-01'
+                      end_date: '2025-12-31'
+                      transaction_reference: sub_42_3_ABC123
+                      amount: '199.99'
+                      currency: GHC
+                      payment_status: ACTIVE
+          description: ''
+  /api-v1/admin/restaurants/{id}/suspend/:
+    post:
+      operationId: admin_restaurant_suspend
+      description: Suspend a restaurant by disabling its owner user and revoking tokens.
+        Expects a JSON body with "reason".
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: {}
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: {}
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api-v1/admin/restaurants/{id}/unsuspend/:
+    post:
+      operationId: admin_restaurant_unsuspend
+      description: Unsuspend a restaurant by re-enabling its owner user (if not deleted).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api-v1/admin/restaurants/{id}/users/:
+    get:
+      operationId: admin_restaurant_users
+      description: List users associated with the restaurant (owner user for now).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminRestaurantUser'
+          description: ''
+  /api-v1/admin/tables/:
+    get:
+      operationId: admin_tables_list
+      description: List all tables in the system (admin only).
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Table'
+          description: ''
+  /api-v1/admin/users/:
+    get:
+      operationId: admin_list_users
+      description: List users (admin/staff only). Supports optional 'q' search across
+        name, email, phone.
+      parameters:
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Search by name, email or phone
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+          description: ''
+  /api-v1/admin/verifyuser/:
+    post:
+      operationId: admin_verify_user
+      description: Set admin verification status for a user by id. Staff-only.
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminVerifyUser'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminVerifyUser'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminVerifyUser'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+  /api-v1/adminlogin/:
+    post:
+      operationId: admin_login
+      description: Admin/Staff-only login endpoint (same as LoginAPI but enforces
+        staff/admin).
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+  /api-v1/changepassword/:
+    post:
+      operationId: change_password
+      description: Change user password
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleStatus'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+  /api-v1/chatbot/intent/:
+    post:
+      operationId: chatbot_intent
+      description: Classify user message with OpenAI into intents and return extracted
+        entities.
+      parameters:
+      - in: query
+        name: message
+        schema:
+          type: string
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api-v1/complaints/:
+    post:
+      operationId: submit_complaint
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Complaint'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Complaint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Complaint'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Complaint'
+          description: ''
+  /api-v1/login/:
+    post:
+      operationId: login
+      description: Login api endpoint
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+  /api-v1/logout/:
+    post:
+      operationId: logout
+      description: Logout user by invalidating their Knox token(s).
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimpleStatus'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SimpleStatus'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SimpleStatus'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleStatus'
+          description: ''
+  /api-v1/menu/:
+    get:
+      operationId: retrieve_menu
+      description: Retrieve the menu. Filter by restaurant_rid or search by name/description.
+      parameters:
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: restaurant_rid
+        schema:
+          type: string
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Dish'
+          description: ''
+  /api-v1/orders/{ord_id}/status/:
+    get:
+      operationId: check_order_status
+      parameters:
+      - in: path
+        name: ord_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api-v1/orders/place/:
+    post:
+      operationId: place_order
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceOrder'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlaceOrder'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlaceOrder'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api-v1/otplogin/:
+    post:
+      operationId: otp_login
+      description: Login api endpoint using OTP
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOTPPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyOTPPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyOTPPostRequest'
+        required: true
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+  /api-v1/payments/{ord_id}/confirm/:
+    post:
+      operationId: payment_confirm
+      parameters:
+      - in: path
+        name: ord_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentConfirm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentConfirm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentConfirm'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+  /api-v1/payments/banks/:
+    get:
+      operationId: list_banks
+      description: Return a list of banks supported by the configured provider (Paystack).
+      parameters:
+      - in: query
+        name: country
+        schema:
+          type: string
+        description: Filter banks by country (provider-dependent).
+      - in: query
+        name: currency
+        schema:
+          type: string
+        description: Filter banks by currency (e.g. NGN, GHS).
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BanksListResponse'
+              examples:
+                BanksList(Paystack):
+                  value:
+                    provider: PAYSTACK
+                    banks:
+                    - name: Access Bank
+                      slug: access-bank
+                      code: '044'
+                      longcode: 044150149
+                      gateway: emandate
+                      pay_with_bank: true
+                      active: true
+                      country: Nigeria
+                      currency: NGN
+                      type: nuban
+                  summary: Banks List (Paystack)
+          description: ''
+  /api-v1/payments/intent/:
+    post:
+      operationId: payment_intent
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentIntent'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentIntent'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentIntent'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+  /api-v1/payments/paystack/webhook/:
+    post:
+      operationId: paystack_webhook
+      description: Paystack webhook endpoint to process payment and subscription events.
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api-v1/payments/refund/:
+    post:
+      operationId: payment_refund
+      description: Issue a refund for a successful payment. Only admins/staff may
+        refund payments.
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRefund'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentRefund'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentRefund'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRefund'
+          description: ''
+  /api-v1/register/:
+    post:
+      operationId: register
+      description: Register User api endpoint
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUser'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterUser'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterUser'
+        required: true
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterUserResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+  /api-v1/reservations/:
+    get:
+      operationId: list_reservations
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReadonlyReservation'
+          description: ''
+    post:
+      operationId: create_reservation
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api-v1/resetpassword/:
+    post:
+      operationId: reset_password
+      description: Reset user password
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPassword'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResetPassword'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResetPassword'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleStatus'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+  /api-v1/restaurants/create/:
+    post:
+      operationId: create_restaurant
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestaurantCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RestaurantCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RestaurantCreate'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantProfile'
+          description: ''
+  /api-v1/restaurants/dishes/:
+    get:
+      operationId: restaurant_dishes_list
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Dish'
+          description: ''
+    post:
+      operationId: restaurant_dishes_create
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DishCreateUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DishCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DishCreateUpdate'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dish'
+          description: ''
+  /api-v1/restaurants/dishes/{id}/:
+    get:
+      operationId: restaurant_dishes_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dish'
+          description: ''
+    put:
+      operationId: restaurant_dishes_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DishCreateUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DishCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DishCreateUpdate'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dish'
+          description: ''
+    patch:
+      operationId: restaurant_dishes_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDishCreateUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDishCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDishCreateUpdate'
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dish'
+          description: ''
+    delete:
+      operationId: restaurant_dishes_delete
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '204':
+          description: No response body
+  /api-v1/restaurants/operational-hours/:
+    get:
+      operationId: restaurant_operational_hours_list
+      description: List operational hours for the authenticated restaurant owner.
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationalHours'
+          description: ''
+    post:
+      operationId: restaurant_operational_hours_create
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationalHoursCreateUpdate'
+            examples:
+              CreateMondayHours:
+                value:
+                  day_of_week: Monday
+                  open_time: 09:00:00
+                  close_time: '17:00:00'
+                summary: Create Monday Hours
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationalHoursCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationalHoursCreateUpdate'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalHours'
+              examples:
+                CreateMondayHours:
+                  value:
+                    day_of_week: Monday
+                    open_time: 09:00:00
+                    close_time: '17:00:00'
+                  summary: Create Monday Hours
+          description: ''
+  /api-v1/restaurants/operational-hours/{id}/:
+    get:
+      operationId: restaurant_operational_hours_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalHours'
+          description: ''
+    put:
+      operationId: restaurant_operational_hours_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationalHoursCreateUpdate'
+            examples:
+              UpdateFridayHours:
+                value:
+                  day_of_week: Friday
+                  open_time: '10:00:00'
+                  close_time: '18:00:00'
+                summary: Update Friday Hours
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationalHoursCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationalHoursCreateUpdate'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalHours'
+              examples:
+                UpdateFridayHours:
+                  value:
+                    day_of_week: Friday
+                    open_time: '10:00:00'
+                    close_time: '18:00:00'
+                  summary: Update Friday Hours
+          description: ''
+    patch:
+      operationId: restaurant_operational_hours_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationalHoursCreateUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationalHoursCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationalHoursCreateUpdate'
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalHours'
+          description: ''
+    delete:
+      operationId: restaurant_operational_hours_delete
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '204':
+          description: No response body
+  /api-v1/restaurants/operational-hours/batch/:
+    post:
+      operationId: restaurant_operational_hours_batch_upsert
+      description: Batch upsert operational hours for the authenticated restaurant.
+        Use closed=true to remove a day.
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationalHoursBatchUpsert'
+            examples:
+              UpsertFullWeek:
+                value:
+                  days:
+                  - day_of_week: Monday
+                    open_time: 09:00:00
+                    close_time: '17:00:00'
+                  - day_of_week: Tuesday
+                    open_time: 09:00:00
+                    close_time: '17:00:00'
+                  - day_of_week: Wednesday
+                    open_time: 09:00:00
+                    close_time: '17:00:00'
+                  - day_of_week: Thursday
+                    open_time: 09:00:00
+                    close_time: '17:00:00'
+                  - day_of_week: Friday
+                    open_time: 09:00:00
+                    close_time: '17:00:00'
+                  - day_of_week: Saturday
+                    open_time: '10:00:00'
+                    close_time: '14:00:00'
+                  - day_of_week: Sunday
+                    closed: true
+                summary: Upsert Full Week
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationalHoursBatchUpsert'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationalHoursBatchUpsert'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationalHours'
+              examples:
+                UpsertFullWeek:
+                  value:
+                  - days:
+                    - day_of_week: Monday
+                      open_time: 09:00:00
+                      close_time: '17:00:00'
+                    - day_of_week: Tuesday
+                      open_time: 09:00:00
+                      close_time: '17:00:00'
+                    - day_of_week: Wednesday
+                      open_time: 09:00:00
+                      close_time: '17:00:00'
+                    - day_of_week: Thursday
+                      open_time: 09:00:00
+                      close_time: '17:00:00'
+                    - day_of_week: Friday
+                      open_time: 09:00:00
+                      close_time: '17:00:00'
+                    - day_of_week: Saturday
+                      open_time: '10:00:00'
+                      close_time: '14:00:00'
+                    - day_of_week: Sunday
+                      closed: true
+                  summary: Upsert Full Week
+          description: ''
+  /api-v1/restaurants/orders/:
+    get:
+      operationId: restaurant_orders_list
+      description: List orders for the authenticated restaurant owner.
+      parameters:
+      - in: query
+        name: created_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: created_to
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: payment_status
+        schema:
+          type: string
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Search by ord_id
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+          description: ''
+  /api-v1/restaurants/orders/{ord_id}/:
+    patch:
+      operationId: restaurant_order_update
+      parameters:
+      - in: path
+        name: ord_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderStatusUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderStatusUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderStatusUpdate'
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api-v1/restaurants/profile/:
+    get:
+      operationId: restaurant_profile
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantProfile'
+          description: ''
+  /api-v1/restaurants/reservations/:
+    get:
+      operationId: restaurant_reservations_list
+      description: List reservations for the authenticated restaurant owner.
+      parameters:
+      - in: query
+        name: created_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: created_to
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api-v1/restaurants/reservations/{id}/:
+    patch:
+      operationId: restaurant_reservation_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReservationStatusUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReservationStatusUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReservationStatusUpdate'
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api-v1/restaurants/tables/:
+    get:
+      operationId: restaurant_tables_list
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Table'
+          description: ''
+    post:
+      operationId: restaurant_tables_create
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableCreateUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TableCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TableCreateUpdate'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+          description: ''
+  /api-v1/restaurants/tables/{id}/:
+    get:
+      operationId: restaurant_tables_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+          description: ''
+    put:
+      operationId: restaurant_tables_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableCreateUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TableCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TableCreateUpdate'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+          description: ''
+    patch:
+      operationId: restaurant_tables_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTableCreateUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTableCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTableCreateUpdate'
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+          description: ''
+    delete:
+      operationId: restaurant_tables_delete
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '204':
+          description: No response body
+  /api-v1/restaurants/update/:
+    put:
+      operationId: update_restaurant
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestaurantProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RestaurantProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RestaurantProfile'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantProfile'
+          description: ''
+  /api-v1/subscriptions/admin/:
+    get:
+      operationId: admin_subscriptions_list
+      description: List all restaurant subscriptions.
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscription'
+          description: ''
+  /api-v1/subscriptions/confirm/:
+    post:
+      operationId: subscription_confirm
+      description: Confirm a Paystack subscription payment using a reference and activate
+        the subscription.
+      parameters:
+      - in: query
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+          description: ''
+  /api-v1/subscriptions/packages/:
+    get:
+      operationId: admin_subscription_packages_list
+      description: List all subscription packages.
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubscriptionPackage'
+          description: ''
+    post:
+      operationId: admin_subscription_packages_create
+      description: Create a new subscription package.
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionPackage'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubscriptionPackage'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubscriptionPackage'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionPackage'
+          description: ''
+  /api-v1/subscriptions/subscribe/:
+    post:
+      operationId: restaurant_subscribe
+      description: Subscribe the authenticated restaurant to a package and initialize
+        Paystack payment.
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Subscription'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Subscription'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Subscription'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api-v1/userpreferences/:
+    get:
+      operationId: user_preferences_get
+      description: Get user preferences for the logged in user
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    put:
+      operationId: user_preferences_put
+      description: Update user preferences for the logged in user
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+  /api-v1/userprofile/:
+    get:
+      operationId: user_profile_get
+      description: Get user profile for the logged in user
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    post:
+      operationId: user_profile_post
+      description: Use this to disable/enable a user account. To be used by admins
+        only
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminToggleUser'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminToggleUser'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminToggleUser'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+    put:
+      operationId: user_profile_put
+      description: Update user profile for the logged in user
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+    delete:
+      operationId: user_profile_delete
+      description: Delete user account. To be used by admins only
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+  /api-v1/verifyotp/:
+    get:
+      operationId: verify_otp_get
+      description: Use this endpoint to send OTP to the user
+      parameters:
+      - in: query
+        name: phone
+        schema:
+          type: string
+        description: Phone number to which the OTP will be sent.
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+    post:
+      operationId: verify_otp_post
+      description: Verify OTP api endpoint
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOTPPostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyOTPPostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyOTPPostRequest'
+        required: true
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericMessage'
+          description: ''
+components:
+  schemas:
+    AdminRestaurantList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        rid:
+          type: string
+          maxLength: 15
+        phone:
+          type: string
+          maxLength: 15
+        whatsapp:
+          type: string
+          nullable: true
+          maxLength: 15
+        instagram:
+          type: string
+          nullable: true
+          maxLength: 255
+        facebook:
+          type: string
+          nullable: true
+          maxLength: 255
+        website:
+          type: string
+          format: uri
+          maxLength: 100
+        is_suspended:
+          type: boolean
+        suspension_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        user_id:
+          type: integer
+          readOnly: true
+        user_name:
+          type: string
+          readOnly: true
+        user_role:
+          type: string
+          readOnly: true
+        subscription_name:
+          type: string
+          readOnly: true
+        subscription_status:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - phone
+      - subscription_name
+      - subscription_status
+      - updated_at
+      - user_id
+      - user_name
+      - user_role
+    AdminRestaurantUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          maxLength: 50
+        role:
+          type: string
+          maxLength: 20
+        status:
+          type: string
+          readOnly: true
+      required:
+      - email
+      - id
+      - name
+      - status
+    AdminToggleUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        is_active:
+          type: boolean
+      required:
+      - id
+      - is_active
+    AdminVerifyUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        admin_verified:
+          type: boolean
+          default: true
+      required:
+      - id
+    Bank:
+      type: object
+      description: Shape of a single bank item as returned by Paystack /bank.
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        code:
+          type: string
+        longcode:
+          type: string
+          nullable: true
+        gateway:
+          type: string
+          nullable: true
+        pay_with_bank:
+          type: boolean
+        active:
+          type: boolean
+        country:
+          type: string
+        currency:
+          type: string
+        type:
+          type: string
+      required:
+      - name
+    BanksListResponse:
+      type: object
+      properties:
+        provider:
+          type: string
+        banks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bank'
+      required:
+      - banks
+      - provider
+    ChangePassword:
+      type: object
+      properties:
+        old_password:
+          type: string
+        new_password:
+          type: string
+        confirm_password:
+          type: string
+      required:
+      - confirm_password
+      - new_password
+      - old_password
+    Complaint:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: integer
+          readOnly: true
+        restaurant:
+          type: integer
+          nullable: true
+        order:
+          type: integer
+          nullable: true
+        subject:
+          type: string
+          maxLength: 120
+        message:
+          type: string
+        status:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - message
+      - status
+      - subject
+      - updated_at
+      - user
+    DayOfWeekEnum:
+      enum:
+      - Monday
+      - Tuesday
+      - Wednesday
+      - Thursday
+      - Friday
+      - Saturday
+      - Sunday
+      type: string
+      description: |-
+        * `Monday` - Monday
+        * `Tuesday` - Tuesday
+        * `Wednesday` - Wednesday
+        * `Thursday` - Thursday
+        * `Friday` - Friday
+        * `Saturday` - Saturday
+        * `Sunday` - Sunday
+    Dish:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        restaurant:
+          allOf:
+          - $ref: '#/components/schemas/RestaurantProfile'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 500
+        currency:
+          type: string
+          maxLength: 5
+        in_stock:
+          type: boolean
+        price:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        type:
+          type: string
+          maxLength: 50
+        tag:
+          type: string
+          maxLength: 20
+        availability:
+          type: string
+          maxLength: 50
+      required:
+      - created_at
+      - description
+      - id
+      - name
+      - restaurant
+      - tag
+      - type
+      - updated_at
+    DishCreateUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 500
+        currency:
+          type: string
+          maxLength: 5
+        in_stock:
+          type: boolean
+        price:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        type:
+          type: string
+          maxLength: 50
+        tag:
+          type: string
+          maxLength: 20
+        availability:
+          type: string
+          maxLength: 50
+      required:
+      - description
+      - id
+      - name
+      - tag
+      - type
+    GenericMessage:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    Login:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+      - email
+      - password
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+      required:
+      - token
+      - user
+    OperationalHours:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        day_of_week:
+          $ref: '#/components/schemas/DayOfWeekEnum'
+        open_time:
+          type: string
+          format: time
+        close_time:
+          type: string
+          format: time
+        restaurant:
+          type: integer
+      required:
+      - close_time
+      - created_at
+      - day_of_week
+      - id
+      - open_time
+      - restaurant
+      - updated_at
+    OperationalHoursBatchUpsert:
+      type: object
+      properties:
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationalHoursDay'
+      required:
+      - days
+    OperationalHoursCreateUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        day_of_week:
+          $ref: '#/components/schemas/DayOfWeekEnum'
+        open_time:
+          type: string
+          format: time
+        close_time:
+          type: string
+          format: time
+      required:
+      - close_time
+      - day_of_week
+      - id
+      - open_time
+    OperationalHoursDay:
+      type: object
+      properties:
+        day_of_week:
+          $ref: '#/components/schemas/DayOfWeekEnum'
+        open_time:
+          type: string
+          format: time
+        close_time:
+          type: string
+          format: time
+        closed:
+          type: boolean
+          default: false
+      required:
+      - day_of_week
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        ord_id:
+          type: string
+          readOnly: true
+        user:
+          type: integer
+        restaurant:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        total_price:
+          type: integer
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        delivery_address:
+          type: string
+          maxLength: 500
+        payment_method:
+          type: string
+          maxLength: 50
+        payment_status:
+          type: string
+          readOnly: true
+        currency:
+          type: string
+          maxLength: 5
+        special_instructions:
+          type: string
+          nullable: true
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - delivery_address
+      - id
+      - items
+      - ord_id
+      - payment_status
+      - restaurant
+      - status
+      - total_price
+      - updated_at
+      - user
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        dish:
+          $ref: '#/components/schemas/Dish'
+        quantity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - dish
+      - id
+    OrderItemInput:
+      type: object
+      properties:
+        dish_id:
+          type: integer
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+      required:
+      - dish_id
+    OrderStatusUpdateStatusEnum:
+      enum:
+      - PENDING
+      - CONFIRMED
+      - PREPARING
+      - READY
+      - DISPATCHED
+      - COMPLETED
+      - CANCELLED
+      type: string
+      description: |-
+        * `PENDING` - PENDING
+        * `CONFIRMED` - CONFIRMED
+        * `PREPARING` - PREPARING
+        * `READY` - READY
+        * `DISPATCHED` - DISPATCHED
+        * `COMPLETED` - COMPLETED
+        * `CANCELLED` - CANCELLED
+    PatchedDishCreateUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 500
+        currency:
+          type: string
+          maxLength: 5
+        in_stock:
+          type: boolean
+        price:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        type:
+          type: string
+          maxLength: 50
+        tag:
+          type: string
+          maxLength: 20
+        availability:
+          type: string
+          maxLength: 50
+    PatchedOperationalHoursCreateUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        day_of_week:
+          $ref: '#/components/schemas/DayOfWeekEnum'
+        open_time:
+          type: string
+          format: time
+        close_time:
+          type: string
+          format: time
+    PatchedOrderStatusUpdate:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/OrderStatusUpdateStatusEnum'
+    PatchedReservationStatusUpdate:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status65bEnum'
+    PatchedTableCreateUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        table_id:
+          type: string
+          maxLength: 10
+        capacity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        type:
+          type: string
+          maxLength: 15
+        description:
+          type: string
+          maxLength: 250
+        start_time:
+          type: string
+          format: time
+          nullable: true
+        end_time:
+          type: string
+          format: time
+          nullable: true
+        buffer_time:
+          type: string
+          nullable: true
+          maxLength: 10
+        currency:
+          type: string
+          maxLength: 10
+        price:
+          type: number
+          format: double
+        available:
+          type: boolean
+        restaurant:
+          type: integer
+          nullable: true
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user_name:
+          type: string
+          readOnly: true
+        restaurant_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        provider:
+          type: string
+          maxLength: 50
+        status:
+          type: string
+          readOnly: true
+        transaction_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        client_secret:
+          type: string
+          nullable: true
+          maxLength: 200
+        metadata: {}
+        order:
+          type: integer
+        user:
+          type: integer
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - currency
+      - id
+      - order
+      - restaurant_name
+      - status
+      - updated_at
+      - user
+      - user_name
+    PaymentConfirm:
+      type: object
+      properties:
+        ord_id:
+          type: string
+        transaction_id:
+          type: string
+        reference:
+          type: string
+      required:
+      - ord_id
+    PaymentIntent:
+      type: object
+      properties:
+        ord_id:
+          type: string
+        provider:
+          type: string
+          default: MOCK
+      required:
+      - ord_id
+    PaymentRefund:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        payment:
+          type: integer
+        user:
+          type: integer
+          description: User who received the refund
+        initiated_by:
+          type: integer
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        reason:
+          type: string
+          nullable: true
+        status:
+          type: string
+          readOnly: true
+        provider_reference:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - id
+      - initiated_by
+      - payment
+      - provider_reference
+      - status
+      - user
+    PlaceOrder:
+      type: object
+      properties:
+        restaurant_rid:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemInput'
+        delivery_address:
+          type: string
+        payment_method:
+          type: string
+          default: Cash on Delivery
+        special_instructions:
+          type: string
+          nullable: true
+      required:
+      - delivery_address
+      - items
+      - restaurant_rid
+    ReadonlyReservation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        table:
+          allOf:
+          - $ref: '#/components/schemas/Table'
+          readOnly: true
+        restaurant:
+          allOf:
+          - $ref: '#/components/schemas/RestaurantProfile'
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        user_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status65bEnum'
+          readOnly: true
+        date:
+          type: string
+          format: date
+          nullable: true
+        time:
+          type: string
+          format: time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - restaurant
+      - status
+      - table
+      - updated_at
+      - user
+      - user_name
+    RegisterUser:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 50
+        phone:
+          type: string
+          maxLength: 15
+        password:
+          type: string
+          writeOnly: true
+          maxLength: 128
+        name:
+          type: string
+          maxLength: 255
+        address:
+          type: string
+          nullable: true
+          maxLength: 500
+        referral_code:
+          type: string
+      required:
+      - email
+      - name
+      - password
+      - phone
+    RegisterUserResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+      required:
+      - token
+      - user
+    Reservation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        table:
+          type: integer
+        restaurant:
+          type: integer
+        user:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status65bEnum'
+          readOnly: true
+        date:
+          type: string
+          format: date
+          nullable: true
+        time:
+          type: string
+          format: time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - restaurant
+      - status
+      - table
+      - updated_at
+      - user
+    ResetPassword:
+      type: object
+      properties:
+        email:
+          type: string
+        new_password:
+          type: string
+        confirm_password:
+          type: string
+      required:
+      - confirm_password
+      - email
+      - new_password
+    RestaurantCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          maxLength: 15
+        whatsapp:
+          type: string
+          nullable: true
+          maxLength: 15
+        instagram:
+          type: string
+          nullable: true
+          maxLength: 255
+        facebook:
+          type: string
+          nullable: true
+          maxLength: 255
+        twitter:
+          type: string
+          nullable: true
+          maxLength: 255
+        bank_account_number:
+          type: string
+          nullable: true
+          maxLength: 50
+        bank_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        bank_code:
+          type: string
+          nullable: true
+          maxLength: 50
+        bank_branch:
+          type: string
+          nullable: true
+          maxLength: 255
+        website:
+          type: string
+          format: uri
+          maxLength: 100
+      required:
+      - name
+      - phone
+    RestaurantProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        rid:
+          type: string
+          maxLength: 15
+        name:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          maxLength: 15
+        whatsapp:
+          type: string
+          nullable: true
+          maxLength: 15
+        instagram:
+          type: string
+          nullable: true
+          maxLength: 255
+        facebook:
+          type: string
+          nullable: true
+          maxLength: 255
+        twitter:
+          type: string
+          nullable: true
+          maxLength: 255
+        bank_account_number:
+          type: string
+          nullable: true
+          maxLength: 50
+        bank_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        bank_code:
+          type: string
+          nullable: true
+          maxLength: 50
+        bank_branch:
+          type: string
+          nullable: true
+          maxLength: 255
+        withdrawal_pin:
+          type: string
+          nullable: true
+          maxLength: 512
+        website:
+          type: string
+          format: uri
+          maxLength: 100
+        is_suspended:
+          type: boolean
+        suspension_reason:
+          type: string
+          nullable: true
+      required:
+      - created_at
+      - id
+      - name
+      - phone
+      - updated_at
+      - user
+    SimpleStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+      required:
+      - status
+    Status65bEnum:
+      enum:
+      - APPROVED
+      - PENDING
+      - CANCELLED
+      type: string
+      description: |-
+        * `APPROVED` - APPROVED
+        * `PENDING` - PENDING
+        * `CANCELLED` - CANCELLED
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        restaurant:
+          type: integer
+          readOnly: true
+        package:
+          allOf:
+          - $ref: '#/components/schemas/SubscriptionPackage'
+          readOnly: true
+        package_id:
+          type: integer
+          writeOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SubscriptionStatusEnum'
+          readOnly: true
+        start_date:
+          type: string
+          format: date
+          readOnly: true
+        end_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        paystack_reference:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - end_date
+      - id
+      - package
+      - package_id
+      - paystack_reference
+      - restaurant
+      - start_date
+      - status
+      - updated_at
+    SubscriptionPackage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        currency:
+          type: string
+          maxLength: 5
+        max_dishes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        max_tables:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        max_orders:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        max_reservations:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - max_dishes
+      - max_orders
+      - max_reservations
+      - max_tables
+      - name
+      - price
+      - updated_at
+    SubscriptionStatusEnum:
+      enum:
+      - ACTIVE
+      - EXPIRED
+      - CANCELLED
+      type: string
+      description: |-
+        * `ACTIVE` - ACTIVE
+        * `EXPIRED` - EXPIRED
+        * `CANCELLED` - CANCELLED
+    Table:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        table_id:
+          type: string
+          maxLength: 10
+        capacity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        type:
+          type: string
+          maxLength: 15
+        description:
+          type: string
+          maxLength: 250
+        start_time:
+          type: string
+          format: time
+          nullable: true
+        end_time:
+          type: string
+          format: time
+          nullable: true
+        buffer_time:
+          type: string
+          nullable: true
+          maxLength: 10
+        currency:
+          type: string
+          maxLength: 10
+        price:
+          type: number
+          format: double
+        available:
+          type: boolean
+        restaurant:
+          type: integer
+          nullable: true
+      required:
+      - created_at
+      - currency
+      - id
+      - table_id
+      - type
+      - updated_at
+    TableCreateUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        table_id:
+          type: string
+          maxLength: 10
+        capacity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        type:
+          type: string
+          maxLength: 15
+        description:
+          type: string
+          maxLength: 250
+        start_time:
+          type: string
+          format: time
+          nullable: true
+        end_time:
+          type: string
+          format: time
+          nullable: true
+        buffer_time:
+          type: string
+          nullable: true
+          maxLength: 10
+        currency:
+          type: string
+          maxLength: 10
+        price:
+          type: number
+          format: double
+        available:
+          type: boolean
+        restaurant:
+          type: integer
+          nullable: true
+      required:
+      - currency
+      - id
+      - table_id
+      - type
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        last_login:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 50
+        phone:
+          type: string
+          maxLength: 15
+        name:
+          type: string
+          maxLength: 255
+        address:
+          type: string
+          nullable: true
+          maxLength: 500
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+        admin_verified:
+          type: boolean
+        role:
+          type: string
+          maxLength: 20
+        deleted:
+          type: boolean
+        is_active:
+          type: boolean
+        is_staff:
+          type: boolean
+        is_superuser:
+          type: boolean
+        phone_verified:
+          type: boolean
+        email_verified:
+          type: boolean
+        profile_registration_status:
+          type: string
+          maxLength: 20
+        preferred_notification_email:
+          type: string
+          format: email
+          nullable: true
+          maxLength: 50
+        preferred_notification_phone:
+          type: string
+          nullable: true
+          maxLength: 15
+      required:
+      - created_at
+      - email
+      - id
+      - name
+      - phone
+      - updated_at
+    UserUpdate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 50
+        phone:
+          type: string
+          maxLength: 15
+        name:
+          type: string
+          maxLength: 255
+        address:
+          type: string
+          nullable: true
+          maxLength: 500
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+        preferred_notification_email:
+          type: string
+          format: email
+          nullable: true
+          maxLength: 50
+        preferred_notification_phone:
+          type: string
+          nullable: true
+          maxLength: 15
+        profile_registration_status:
+          type: string
+          maxLength: 20
+    VerifyOTPPostRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          maxLength: 10
+        otp:
+          type: string
+      required:
+      - otp
+      - phone
+  securitySchemes:
+    knoxApiToken:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Token-based authentication with required prefix "Token"

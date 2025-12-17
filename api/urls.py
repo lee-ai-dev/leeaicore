@@ -46,6 +46,7 @@ urlpatterns += [
     path('restaurants/operational-hours/batch/', vs.RestaurantOperationalHoursBatchAPI.as_view(), name='restaurant_operational_hours_batch'),
     path('complaints/', vs.ComplaintAPI.as_view(), name='complaints'),
     path('payments/intent/', vs.PaymentIntentAPI.as_view(), name='payment_intent'),
+    path('payments/banks/', vs.BanksListAPI.as_view(), name='banks_list'),
     path('payments/<str:ord_id>/confirm/', vs.PaymentConfirmAPI.as_view(), name='payment_confirm'),
     path('payments/refund/', vs.PaymentRefundAPI.as_view(), name='payment_refund'),
     path('payments/paystack/webhook/', vs.PaystackWebhookAPI.as_view(), name='paystack_webhook'),

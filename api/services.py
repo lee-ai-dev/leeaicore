@@ -39,6 +39,36 @@ class PaystackClient:
             raise ValueError(message)
         return data['data']  # contains status etc.
 
+    def list_banks(
+        self,
+        *,
+        currency: str | None = None,
+        country: str | None = None,
+        per_page: int = 200,
+        page: int = 1,
+    ):
+        """List banks supported by Paystack.
+
+        Paystack supports filtering by currency and/or country depending on region.
+        Returns Paystack's bank list payload (list of dicts).
+        """
+        url = f"{self.base_url}/bank"
+        params: dict[str, object] = {
+            'perPage': per_page,
+            'page': page,
+        }
+        if currency:
+            params['currency'] = currency
+        if country:
+            params['country'] = country
+
+        resp = requests.get(url, headers=self._headers, params=params, timeout=15)
+        data = resp.json() if resp.content else {}
+        if resp.status_code >= 400 or not data.get('status'):
+            message = data.get('message') or 'Paystack list banks failed'
+            raise ValueError(message)
+        return data.get('data') or []
+
 
 def get_active_subscription(restaurant):
     """Return the active subscription for a restaurant, if any."""

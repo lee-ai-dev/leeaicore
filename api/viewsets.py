@@ -39,6 +39,7 @@ from api.serializers import (
     RestaurantProfileSerializer,
 	AdminRestaurantUserSerializer,
 	AdminRestaurantListSerializer,
+	BanksListResponseSerializer,
 	SubscriptionPackageSerializer,
 	SubscriptionSerializer,
 )
@@ -325,6 +326,63 @@ class PaymentConfirmAPI(APIView):
 		order.save(update_fields=["payment_status", "status", "updated_at"])
 
 		return Response(PaymentSerializer(payment).data, status=200)
+
+
+class BanksListAPI(APIView):
+	"""List banks from the configured payment provider (Paystack)."""
+	permission_classes = (permissions.AllowAny,)
+	throttle_scope = 'orders'
+
+	@extend_schema(
+		parameters=[
+			OpenApiParameter(name='currency', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False, description='Filter banks by currency (e.g. NGN, GHS).'),
+			OpenApiParameter(name='country', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False, description='Filter banks by country (provider-dependent).'),
+		],
+		responses={200: BanksListResponseSerializer},
+		operation_id='list_banks',
+		description='Return a list of banks supported by the configured provider (Paystack).',
+		examples=[
+			OpenApiExample(
+				name='Banks List (Paystack)',
+				value={
+					"provider": "PAYSTACK",
+					"banks": [
+						{
+							"name": "Access Bank",
+							"slug": "access-bank",
+							"code": "044",
+							"longcode": "044150149",
+							"gateway": "emandate",
+							"pay_with_bank": True,
+							"active": True,
+							"country": "Nigeria",
+							"currency": "NGN",
+							"type": "nuban",
+						},
+					]
+				},
+				response_only=True,
+			),
+		]
+	)
+	def get(self, request):
+		# provider = (request.query_params.get('provider') or getattr(settings, 'PAYMENT_PROVIDER', 'PAYSTACK')).upper()
+		# if provider != 'PAYSTACK':
+		# 	return Response({"message": f"Unsupported provider: {provider}"}, status=400)
+
+		secret = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
+		if not secret:
+			return Response({"message": "PAYSTACK_SECRET_KEY is not configured"}, status=503)
+
+		currency = request.query_params.get('currency')
+		country = request.query_params.get('country')
+		client = PaystackClient()
+		try:
+			banks = client.list_banks(currency=currency, country=country)
+		except ValueError as e:
+			return Response({"message": str(e)}, status=502)
+
+		return Response({"provider": "PAYSTACK", "banks": banks}, status=200)
 
 
 class ChatbotIntentAPI(APIView):
