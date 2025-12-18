@@ -5,6 +5,9 @@ from django.contrib.auth import get_user_model
 from accounts.models import Restaurant
 from api.models import Order, Reservation, Payment, PaymentRefund
 from urllib.parse import parse_qs
+import logging
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -40,12 +43,20 @@ class RestaurantBaseConsumer(KnoxTokenAuthMixin, AsyncJsonWebsocketConsumer):
     async def connect(self):
         user = await self.authenticate()
         if not user:
+            logger.info("WS auth failed: missing/invalid token")
             await self.close(code=4001)
             return
 
+        is_admin = bool(user.is_staff or user.is_superuser or str(getattr(user, "role", "")).upper() == "ADMIN")
+
         # Only restaurant owners (or staff/superusers) are allowed
         restaurant = await self._get_restaurant_for_user(user)
-        if not restaurant and not (user.is_staff or user.is_superuser):
+        if not restaurant and not is_admin:
+            logger.info(
+                "WS rejected: user has no restaurant and is not admin/staff (user_id=%s role=%s)",
+                getattr(user, "id", None),
+                getattr(user, "role", None),
+            )
             await self.close(code=4003)
             return
 
