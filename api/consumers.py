@@ -26,10 +26,22 @@ class KnoxTokenAuthMixin:
         if not token:
             self._auth_error = "missing_token"
             return None
+
+        # Be forgiving with common auth header formats being pasted into ?token=...
+        # e.g. "Token <knox>" or "Bearer <knox>"
+        token = str(token).strip().strip('"').strip("'")
+        if " " in token:
+            token = token.split()[-1]
         try:
             auth_token = await self._get_auth_token(token)
         except AuthToken.DoesNotExist:
             self._auth_error = "invalid_token"
+            # Log only the token_key (first 8) + length; never log full token.
+            logger.warning(
+                "WS token not found (token_key=%s len=%s)",
+                token[:8],
+                len(token),
+            )
             return None
         user = auth_token.user
         if not user.is_active:
