@@ -16,18 +16,24 @@ class KnoxTokenAuthMixin:
     """Mixin to authenticate WebSocket connections using Knox token."""
 
     async def authenticate(self):
+        # Used for debugging/logging rejections in connect()
+        self._auth_error = None
+
         # Expect ?token=<knox_token> in query string
         query_string = self.scope.get("query_string", b"").decode("utf-8")
         params = parse_qs(query_string)
         token = (params.get("token") or [None])[0]
         if not token:
+            self._auth_error = "missing_token"
             return None
         try:
             auth_token = await self._get_auth_token(token)
         except AuthToken.DoesNotExist:
+            self._auth_error = "invalid_token"
             return None
         user = auth_token.user
         if not user.is_active:
+            self._auth_error = "inactive_user"
             return None
         self.scope["user"] = user
         return user
@@ -43,7 +49,12 @@ class RestaurantBaseConsumer(KnoxTokenAuthMixin, AsyncJsonWebsocketConsumer):
     async def connect(self):
         user = await self.authenticate()
         if not user:
-            logger.info("WS auth failed: missing/invalid token")
+            logger.warning(
+                "WS auth failed (%s) path=%s client=%s",
+                getattr(self, "_auth_error", None),
+                self.scope.get("path"),
+                self.scope.get("client"),
+            )
             await self.close(code=4001)
             return
 
@@ -52,7 +63,7 @@ class RestaurantBaseConsumer(KnoxTokenAuthMixin, AsyncJsonWebsocketConsumer):
         # Only restaurant owners (or staff/superusers) are allowed
         restaurant = await self._get_restaurant_for_user(user)
         if not restaurant and not is_admin:
-            logger.info(
+            logger.warning(
                 "WS rejected: user has no restaurant and is not admin/staff (user_id=%s role=%s)",
                 getattr(user, "id", None),
                 getattr(user, "role", None),
