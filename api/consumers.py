@@ -1,6 +1,6 @@
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
-from knox.models import AuthToken
+from knox.auth import TokenAuthentication
 from django.contrib.auth import get_user_model
 from accounts.models import Restaurant
 from api.models import Order, Reservation, Payment, PaymentRefund
@@ -20,30 +20,24 @@ class KnoxTokenAuthMixin:
         self._auth_error = None
 
         # Expect ?token=<knox_token> in query string
-        query_string = self.scope.get("query_string", b"").decode("utf-8")
-        params = parse_qs(query_string)
-        token = (params.get("token") or [None])[0]
+        query_string = self.scope.get("query_string", b"")
+        token = self._extract_token_from_query_string(query_string)
         if not token:
             self._auth_error = "missing_token"
             return None
 
-        # Be forgiving with common auth header formats being pasted into ?token=...
-        # e.g. "Token <knox>" or "Bearer <knox>"
-        token = str(token).strip().strip('"').strip("'")
-        if " " in token:
-            token = token.split()[-1]
         try:
-            auth_token = await self._get_auth_token(token)
-        except AuthToken.DoesNotExist:
+            user = await self._get_user_from_knox_token(token)
+        except Exception as e:
             self._auth_error = "invalid_token"
-            # Log only the token_key (first 8) + length; never log full token.
             logger.warning(
-                "WS token not found (token_key=%s len=%s)",
+                "WS token auth failed (token_key=%s len=%s err=%s)",
                 token[:8],
                 len(token),
+                str(e)[:200],
             )
             return None
-        user = auth_token.user
+
         if not user.is_active:
             self._auth_error = "inactive_user"
             return None
@@ -51,8 +45,31 @@ class KnoxTokenAuthMixin:
         return user
 
     @database_sync_to_async
-    def _get_auth_token(self, token):
-        return AuthToken.objects.select_related("user").get(token_key=token[:8])
+    def _get_user_from_knox_token(self, token: str):
+        # Mirrors the pattern from the reference project:
+        # TokenAuthentication().authenticate_credentials(token.encode())
+        user_auth_tuple = TokenAuthentication().authenticate_credentials(token.encode("utf-8"))
+        return user_auth_tuple[0]
+
+    def _extract_token_from_query_string(self, query_string: bytes):
+        """Parse and normalize ?token=... from the raw ASGI query_string."""
+        try:
+            parsed = parse_qs((query_string or b"").decode("utf-8"))
+        except Exception:
+            return None
+
+        token = (parsed.get("token") or [None])[0]
+        if not token:
+            return None
+
+        token = str(token).strip().strip('"').strip("'")
+        # Normalize token in case the client accidentally appends a trailing slash
+        token = token.rstrip("/")
+        # Be forgiving with common auth header formats being pasted into ?token=...
+        # e.g. "Token <knox>" or "Bearer <knox>"
+        if " " in token:
+            token = token.split()[-1]
+        return token or None
 
 
 class RestaurantBaseConsumer(KnoxTokenAuthMixin, AsyncJsonWebsocketConsumer):
