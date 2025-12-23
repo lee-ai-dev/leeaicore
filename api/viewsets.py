@@ -1751,20 +1751,23 @@ class IntegrationsViewSet(viewsets.ViewSet):
 			{
 				"integration": "paystack",
 				"clients": 42,
+				"category": "payment",
 				"status": "active",
 				"lastsync": now - timedelta(minutes=7),
 			},
 			{
 				"integration": "whatsapp",
 				"clients": 18,
-				"status": "warning",
-				"lastsync": now - timedelta(hours=3),
+				"category": "messaging",
+				"status": "active",
+				"lastsync": now - timedelta(minutes=3),
 			},
 			{
-				"integration": "google_maps",
+				"integration": "stripe",
 				"clients": 9,
+				"category": "payment",
 				"status": "inactive",
-				"lastsync": now - timedelta(days=2),
+				"lastsync": now - timedelta(minutes=2),
 			},
 		]
 		return Response(IntegrationSummarySerializer(data, many=True).data)
