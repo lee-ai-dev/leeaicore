@@ -8,12 +8,28 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure--wr_(881a=5d%b1-3=_t2592v7!iz%b8p%93!kf$1s4)x)-^q-'
+SECRET_KEY = os.getenv(
+    'DJANGO_SECRET_KEY',
+    'django-insecure--wr_(881a=5d%b1-3=_t2592v7!iz%b8p%93!kf$1s4)x)-^q-',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').strip().lower() in {'1', 'true', 'yes', 'on'}
 
-ALLOWED_HOSTS = ["*"]
+
+def _split_env_list(name: str, default: str = '') -> list[str]:
+    value = os.getenv(name, default)
+    return [part.strip() for part in value.split(',') if part.strip()]
+
+ALLOWED_HOSTS = _split_env_list('DJANGO_ALLOWED_HOSTS', '*')
+
+# If you're behind a reverse proxy (nginx, load balancer) that terminates TLS,
+# ensure Django knows the original scheme was HTTPS.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Fix: allow CSRF origin checks for your deployed admin host.
+# Example: https://api.trylee.io
+CSRF_TRUSTED_ORIGINS = _split_env_list('DJANGO_CSRF_TRUSTED_ORIGINS', 'https://api.trylee.io')
 
 
 # Application definition
