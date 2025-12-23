@@ -1733,6 +1733,7 @@ class RestaurantOperationalHoursBatchAPI(APIView):
 class IntegrationSummarySerializer(serializers.Serializer):
 	integration = serializers.CharField()
 	clients = serializers.IntegerField()
+	category = serializers.CharField()
 	status = serializers.CharField()
 	lastsync = serializers.DateTimeField()
 
