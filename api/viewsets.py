@@ -21,6 +21,7 @@ from api.serializers import (
 	ComplaintSerializer,
 	DishSerializer,
 	DishCreateUpdateSerializer,
+	IntegrationsSummaryDataSerializer,
 	MenuQuerySerializer,
 	OrderSerializer,
 	PaymentConfirmSerializer,
@@ -1730,19 +1731,11 @@ class RestaurantOperationalHoursBatchAPI(APIView):
 		return Response(OperationalHoursSerializer(qs, many=True).data)
 
 
-class IntegrationSummarySerializer(serializers.Serializer):
-	integration = serializers.CharField()
-	clients = serializers.IntegerField()
-	category = serializers.CharField()
-	status = serializers.CharField()
-	lastsync = serializers.DateTimeField()
-
-
 class IntegrationsViewSet(viewsets.ViewSet):
 	permission_classes = (IsStaffAdmin,)
 
 	@extend_schema(
-		responses={200: IntegrationSummarySerializer(many=True)},
+		responses={200: IntegrationsSummaryDataSerializer},
 		operation_id='admin_integrations_list',
 		description='Admin-only list of supported integrations (dummy data).'
 	)
@@ -1760,7 +1753,7 @@ class IntegrationsViewSet(viewsets.ViewSet):
 				"integration": "whatsapp",
 				"clients": 18,
 				"category": "messaging",
-				"status": "active",
+				"status": "inactive",
 				"lastsync": now - timedelta(minutes=3),
 			},
 			{
@@ -1771,4 +1764,19 @@ class IntegrationsViewSet(viewsets.ViewSet):
 				"lastsync": now - timedelta(minutes=2),
 			},
 		]
-		return Response(IntegrationSummarySerializer(data, many=True).data)
+		total_clients = sum(item['clients'] for item in data)
+		supported_integrations = len(data)
+		failed_integrations = sum(1 for item in data if item['status'] != 'active')
+		most_used = max(data, key=lambda x: x['clients'])['integration'] if data else None
+		merged_data = {
+			"total_clients": total_clients,
+			"supported_integrations": supported_integrations,
+			"failed_integrations": failed_integrations,
+			"most_used_integration": most_used,
+		}
+		
+		serializer = IntegrationsSummaryDataSerializer(instance={
+			"summary": merged_data,
+			"data": data,
+		})
+		return Response(serializer.data)

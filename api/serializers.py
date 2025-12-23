@@ -376,3 +376,20 @@ class BanksListResponseSerializer(serializers.Serializer):
     provider = serializers.CharField()
     banks = BankSerializer(many=True)
 
+class IntegrationSummarySerializer(serializers.Serializer):
+	integration = serializers.CharField()
+	clients = serializers.IntegerField()
+	category = serializers.CharField()
+	status = serializers.CharField()
+	lastsync = serializers.DateTimeField()
+
+class IntegrationsSummaryOverviewSerializer(serializers.Serializer):
+	total_clients = serializers.IntegerField()
+	supported_integrations = serializers.IntegerField()
+	failed_integrations = serializers.IntegerField()
+	most_used_integration = serializers.CharField(allow_null=True)
+
+
+class IntegrationsSummaryDataSerializer(serializers.Serializer):
+    summary = IntegrationsSummaryOverviewSerializer()
+    data = IntegrationSummarySerializer(many=True)
