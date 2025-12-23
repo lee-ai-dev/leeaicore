@@ -2,11 +2,13 @@ from django.db import transaction
 from django.db.models import Q, Sum, Count
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
-from rest_framework import permissions, status
+from rest_framework import permissions, status, serializers, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
 import hmac
 import hashlib
 from decimal import Decimal
@@ -1726,3 +1728,43 @@ class RestaurantOperationalHoursBatchAPI(APIView):
 		qs = list(OperationalHours.objects.filter(restaurant=restaurant))
 		qs.sort(key=lambda oh: DAY_INDEX.get(oh.day_of_week, 99))
 		return Response(OperationalHoursSerializer(qs, many=True).data)
+
+
+class IntegrationSummarySerializer(serializers.Serializer):
+	integration = serializers.CharField()
+	clients = serializers.IntegerField()
+	status = serializers.CharField()
+	lastsync = serializers.DateTimeField()
+
+
+class IntegrationsViewSet(viewsets.ViewSet):
+	permission_classes = (IsStaffAdmin,)
+
+	@extend_schema(
+		responses={200: IntegrationSummarySerializer(many=True)},
+		operation_id='admin_integrations_list',
+		description='Admin-only list of supported integrations (dummy data).'
+	)
+	def list(self, request):
+		now = timezone.now()
+		data = [
+			{
+				"integration": "paystack",
+				"clients": 42,
+				"status": "active",
+				"lastsync": now - timedelta(minutes=7),
+			},
+			{
+				"integration": "whatsapp",
+				"clients": 18,
+				"status": "warning",
+				"lastsync": now - timedelta(hours=3),
+			},
+			{
+				"integration": "google_maps",
+				"clients": 9,
+				"status": "inactive",
+				"lastsync": now - timedelta(days=2),
+			},
+		]
+		return Response(IntegrationSummarySerializer(data, many=True).data)
