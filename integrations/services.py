@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 from django.conf import settings
@@ -218,7 +218,6 @@ class WhatsAppCloudClient:
 def build_integrations_summary() -> dict:
     """Return integrations summary in the same shape as api.serializers.IntegrationsSummaryDataSerializer."""
     from api.models import Payment
-    from accounts.models import Restaurant
     from .models import WhatsAppIntegration
 
     now = timezone.now()
