@@ -188,6 +188,20 @@ class PaymentConfirmSerializer(serializers.Serializer):
     reference = serializers.CharField(required=False, allow_blank=True)
 
 
+class AccountDetailVerificationRequestSerializer(serializers.Serializer):
+    account_number = serializers.CharField(max_length=50)
+    bank_code = serializers.CharField(max_length=50)
+
+
+class AccountDetailVerificationResponseSerializer(serializers.Serializer):
+    provider = serializers.CharField()
+    account_number = serializers.CharField(allow_blank=True, required=False)
+    account_name = serializers.CharField(allow_blank=True, required=False)
+    bank_code = serializers.CharField(allow_blank=True, required=False)
+    bank_id = serializers.IntegerField(required=False)
+    raw = serializers.DictField(child=serializers.JSONField(), required=False)
+
+
 class PaymentSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.name', read_only=True)
     restaurant_name = serializers.CharField(source='order.restaurant.name', read_only=True)

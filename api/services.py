@@ -69,6 +69,26 @@ class PaystackClient:
             raise ValueError(message)
         return data.get('data') or []
 
+    def resolve_bank_account(self, *, account_number: str, bank_code: str):
+        """Resolve/verify a bank account number with Paystack.
+
+        Paystack endpoint: GET /bank/resolve?account_number=...&bank_code=...
+        Returns Paystack 'data' payload (dict).
+        """
+        url = f"{self.base_url}/bank/resolve"
+        params = {
+            'account_number': account_number,
+            'bank_code': bank_code,
+        }
+        resp = requests.get(url, headers=self._headers, params=params, timeout=15)
+        data = resp.json() if resp.content else {}
+        if resp.status_code >= 400 or not data.get('status'):
+            message = data.get('message') or 'Paystack bank account resolve failed'
+            raise ValueError(message)
+        return data.get('data') or {}
+    
+    
+
 
 def get_active_subscription(restaurant):
     """Return the active subscription for a restaurant, if any."""

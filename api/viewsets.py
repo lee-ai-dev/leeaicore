@@ -43,6 +43,8 @@ from api.serializers import (
 	AdminRestaurantUserSerializer,
 	AdminRestaurantListSerializer,
 	BanksListResponseSerializer,
+	AccountDetailVerificationRequestSerializer,
+	AccountDetailVerificationResponseSerializer,
 	SubscriptionPackageSerializer,
 	SubscriptionSerializer,
 )
@@ -381,6 +383,68 @@ class BanksListAPI(APIView):
 			return Response({"message": str(e)}, status=502)
 
 		return Response({"provider": "PAYSTACK", "banks": banks}, status=200)
+
+
+class AccountDetailVerificationAPI(APIView):
+	"""Verify/resolve a bank account number (Paystack)."""
+	permission_classes = (permissions.IsAuthenticated,)
+	throttle_scope = 'orders'
+
+	@extend_schema(
+		request=AccountDetailVerificationRequestSerializer,
+		responses={200: AccountDetailVerificationResponseSerializer},
+		operation_id='account_detail_verification',
+		description='Resolve a bank account number and bank code via Paystack and return the account name.',
+		examples=[
+			OpenApiExample(
+				name='Resolve Bank Account (Paystack)',
+				value={
+					"account_number": "0123456789",
+					"bank_code": "044",
+				},
+				request_only=True,
+			),
+			OpenApiExample(
+				name='Resolve Bank Account Response',
+				value={
+					"provider": "PAYSTACK",
+					"account_number": "0123456789",
+					"account_name": "JOHN DOE",
+					"bank_code": "044",
+					"bank_id": 12,
+				},
+				response_only=True,
+			),
+		],
+	)
+	def post(self, request):
+		ser = AccountDetailVerificationRequestSerializer(data=request.data or {})
+		ser.is_valid(raise_exception=True)
+
+		secret = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
+		if not secret:
+			return Response({"message": "PAYSTACK_SECRET_KEY is not configured"}, status=503)
+
+		client = PaystackClient()
+		try:
+			data = client.resolve_bank_account(
+				account_number=ser.validated_data['account_number'],
+				bank_code=ser.validated_data['bank_code'],
+			)
+		except ValueError as e:
+			return Response({"message": str(e)}, status=502)
+
+		return Response(
+			{
+				"provider": "PAYSTACK",
+				"account_number": data.get('account_number') or ser.validated_data['account_number'],
+				"account_name": data.get('account_name', ''),
+				"bank_code": ser.validated_data['bank_code'],
+				"bank_id": data.get('bank_id'),
+				"raw": data,
+			},
+			status=200,
+		)
 
 
 class ChatbotIntentAPI(APIView):

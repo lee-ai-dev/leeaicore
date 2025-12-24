@@ -1,9 +1,11 @@
 from django.test import TestCase
+from django.test import override_settings
 from rest_framework.test import APIClient
 from django.urls import reverse
+from unittest.mock import patch
 
 from accounts.models import User, Restaurant
-from api.models import Dish, Table, Order, Reservation, Complaint, Payment
+from api.models import Dish, Table, Order, Reservation, Complaint, Payment, SubscriptionPackage, Subscription
 from leeaicore.sysutils.constants import PaymentStatus
 
 
@@ -22,6 +24,17 @@ class APIFeaturesTest(TestCase):
 		self.restaurant = Restaurant.objects.create(
 			user=self.restaurant_owner, name="Test Resto", phone="111222333"
 		)
+		# Ensure the restaurant has an active subscription to satisfy subscription-limit enforcement
+		pkg = SubscriptionPackage.objects.create(
+			name="Test Plan",
+			price=0,
+			currency="GHC",
+			max_dishes=100,
+			max_tables=100,
+			max_orders=100,
+			max_reservations=100,
+		)
+		Subscription.objects.create(restaurant=self.restaurant, package=pkg, status='ACTIVE')
 		self.dish1 = Dish.objects.create(
 			restaurant=self.restaurant, name="Fufu", description="Fufu & Soup",
 			currency="GHC", in_stock=True, price=50, type="MAIN", tag="ghanaian"
@@ -115,6 +128,34 @@ class APIFeaturesTest(TestCase):
 		res = self.client.post(reverse("chatbot_intent"), {"message": "show me the menu"}, format="json")
 		self.assertEqual(res.status_code, 200)
 		self.assertIn("intent", res.data)
+
+	@override_settings(PAYSTACK_SECRET_KEY='test_secret', PAYSTACK_BASE_URL='https://api.paystack.co')
+	@patch('api.services.requests.get')
+	def test_account_detail_verification(self, mock_get):
+		class _Resp:
+			status_code = 200
+			content = b'{}'
+			def json(self):
+				return {
+					'status': True,
+					'data': {
+						'account_number': '0123456789',
+						'account_name': 'JOHN DOE',
+						'bank_id': 12,
+					},
+				}
+		mock_get.return_value = _Resp()
+
+		res = self.client.post(
+			reverse('verify_account'),
+			{"account_number": "0123456789", "bank_code": "044"},
+			format='json',
+		)
+		self.assertEqual(res.status_code, 200, res.data)
+		self.assertEqual(res.data.get('provider'), 'PAYSTACK')
+		self.assertEqual(res.data.get('account_number'), '0123456789')
+		self.assertEqual(res.data.get('account_name'), 'JOHN DOE')
+		self.assertEqual(res.data.get('bank_code'), '044')
 
 	def test_restaurant_orders_and_reservations_listing(self):
 		# place order as user
