@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'api.apps.ApiConfig',
     'agentic.apps.AgenticConfig',
+    'integrations.apps.IntegrationsConfig',
 
     # Third-party apps
     'corsheaders',
@@ -181,6 +182,7 @@ REST_FRAMEWORK = {
         'chatbot': os.getenv('THROTTLE_CHATBOT', '60/min'),
         'orders': os.getenv('THROTTLE_ORDERS', '30/min'),
         'restaurant': os.getenv('THROTTLE_RESTAURANT', '60/min'),
+        'admin': os.getenv('THROTTLE_ADMIN', '120/min'),
         # Role-scoped overrides
         'anonymous:orders': os.getenv('THROTTLE_ANON_ORDERS', '10/min'),
         'user:orders': os.getenv('THROTTLE_USER_ORDERS', '30/min'),
@@ -257,4 +259,21 @@ OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 PAYMENT_PROVIDER = os.getenv('PAYMENT_PROVIDER', 'MOCK')
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY', '')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY', '')
+
+# WhatsApp Cloud API (Meta)
+WHATSAPP_BASE_URL = os.getenv('WHATSAPP_BASE_URL', 'https://graph.facebook.com')
+WHATSAPP_GRAPH_API_VERSION = os.getenv('WHATSAPP_GRAPH_API_VERSION', 'v20.0')
+
+# Webhook verification token (used during Meta webhook setup)
+WHATSAPP_WEBHOOK_VERIFY_TOKEN = os.getenv('WHATSAPP_WEBHOOK_VERIFY_TOKEN', '')
+
+# App secret for validating X-Hub-Signature-256 on webhook POST
+WHATSAPP_APP_SECRET = os.getenv('WHATSAPP_APP_SECRET', '')
+WHATSAPP_VALIDATE_SIGNATURE = os.getenv('WHATSAPP_VALIDATE_SIGNATURE', 'True').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+# Default access token used to call Graph API (can be overridden per vendor integration record)
+WHATSAPP_ACCESS_TOKEN = os.getenv('WHATSAPP_ACCESS_TOKEN', '')
+
+# Safety toggle for dev: if False, we log outbound messages but do not call Meta.
+WHATSAPP_SEND_MESSAGES = os.getenv('WHATSAPP_SEND_MESSAGES', 'False').strip().lower() in {'1', 'true', 'yes', 'on'}
 PAYSTACK_BASE_URL = os.getenv('PAYSTACK_BASE_URL', 'https://api.paystack.co')
