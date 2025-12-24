@@ -51,6 +51,7 @@ from api.serializers import (
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 from leeaicore.sysutils.permissions import IsStaffAdmin
 from api.services import PaystackClient, enforce_subscription_limit
+from integrations.services import build_integrations_summary
 from typing import Dict
 from knox.models import AuthToken
 
@@ -1804,43 +1805,6 @@ class IntegrationsViewSet(viewsets.ViewSet):
 		description='Admin-only list of supported integrations (dummy data).'
 	)
 	def list(self, request):
-		now = timezone.now()
-		data = [
-			{
-				"integration": "paystack",
-				"clients": 42,
-				"category": "payment",
-				"status": "active",
-				"lastsync": now - timedelta(minutes=7),
-			},
-			{
-				"integration": "whatsapp",
-				"clients": 18,
-				"category": "messaging",
-				"status": "inactive",
-				"lastsync": now - timedelta(minutes=3),
-			},
-			{
-				"integration": "stripe",
-				"clients": 9,
-				"category": "payment",
-				"status": "inactive",
-				"lastsync": now - timedelta(minutes=2),
-			},
-		]
-		total_clients = sum(item['clients'] for item in data)
-		supported_integrations = len(data)
-		failed_integrations = sum(1 for item in data if item['status'] != 'active')
-		most_used = max(data, key=lambda x: x['clients'])['integration'] if data else None
-		merged_data = {
-			"total_clients": total_clients,
-			"supported_integrations": supported_integrations,
-			"failed_integrations": failed_integrations,
-			"most_used_integration": most_used,
-		}
-		
-		serializer = IntegrationsSummaryDataSerializer(instance={
-			"summary": merged_data,
-			"data": data,
-		})
+		payload = build_integrations_summary()
+		serializer = IntegrationsSummaryDataSerializer(instance=payload)
 		return Response(serializer.data)
