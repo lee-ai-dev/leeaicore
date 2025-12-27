@@ -1,4 +1,6 @@
+from django.apps import apps as django_apps
 from django.contrib import admin
+from django.contrib.admin.sites import AlreadyRegistered
 
 from .models import (
 	WhatsAppContact,
@@ -40,3 +42,14 @@ class WhatsAppOutboundMessageAdmin(admin.ModelAdmin):
 	list_display = ('id', 'integration', 'to_wa_id', 'message_type', 'sent_ok', 'created_at')
 	search_fields = ('to_wa_id', 'text', 'provider_message_id')
 	list_filter = ('sent_ok', 'message_type')
+
+
+def _register_all_models(app_label: str) -> None:
+	for model in django_apps.get_app_config(app_label).get_models():
+		try:
+			admin.site.register(model)
+		except AlreadyRegistered:
+			pass
+
+
+_register_all_models('integrations')

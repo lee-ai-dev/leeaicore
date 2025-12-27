@@ -1,4 +1,7 @@
+from django.apps import apps as django_apps
 from django.contrib import admin
+from django.contrib.admin.sites import AlreadyRegistered
+
 from api.models import Dish, Order, OrderItem, Table, Reservation, Payment, Complaint
 
 @admin.register(Dish)
@@ -39,3 +42,14 @@ class ComplaintAdmin(admin.ModelAdmin):
 	list_display = ("id", "user", "restaurant", "order", "subject", "status", "created_at")
 	list_filter = ("status",)
 	search_fields = ("subject", "message")
+
+
+def _register_all_models(app_label: str) -> None:
+	for model in django_apps.get_app_config(app_label).get_models():
+		try:
+			admin.site.register(model)
+		except AlreadyRegistered:
+			pass
+
+
+_register_all_models('api')

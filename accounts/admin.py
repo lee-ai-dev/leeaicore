@@ -1,4 +1,7 @@
+from django.apps import apps as django_apps
 from django.contrib import admin
+from django.contrib.admin.sites import AlreadyRegistered
+
 from accounts.models import User, Restaurant, Wallet, FCMDevice, OTP, OperationalHours
 
 @admin.register(User)
@@ -32,3 +35,14 @@ class OperationalHoursAdmin(admin.ModelAdmin):
 	list_display = ("id", "restaurant", "day_of_week", "open_time", "close_time", "created_at")
 	list_filter = ("day_of_week", "restaurant")
 	search_fields = ("restaurant__name", "restaurant__rid")
+
+
+def _register_all_models(app_label: str) -> None:
+	for model in django_apps.get_app_config(app_label).get_models():
+		try:
+			admin.site.register(model)
+		except AlreadyRegistered:
+			pass
+
+
+_register_all_models('accounts')
