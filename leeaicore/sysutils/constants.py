@@ -15,12 +15,10 @@ class Status(Enum):
 # More specific statuses for domain entities
 class OrderStatus(Enum):
     PENDING = "PENDING"
-    CONFIRMED = "CONFIRMED"
-    PREPARING = "PREPARING"
+    ON_GOING = "ON GOING"
     READY = "READY"
-    DISPATCHED = "DISPATCHED"
     COMPLETED = "COMPLETED"
-    CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
 
 
 class PaymentStatus(Enum):

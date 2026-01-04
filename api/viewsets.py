@@ -1408,13 +1408,11 @@ class RestaurantOrderUpdateAPI(APIView):
 		new_status = ser.validated_data['status']
 		# Enforce allowed state transitions
 		allowed = {
-			OrderStatus.PENDING.value: {OrderStatus.CONFIRMED.value, OrderStatus.CANCELLED.value},
-			OrderStatus.CONFIRMED.value: {OrderStatus.PREPARING.value, OrderStatus.CANCELLED.value},
-			OrderStatus.PREPARING.value: {OrderStatus.READY.value, OrderStatus.CANCELLED.value},
-			OrderStatus.READY.value: {OrderStatus.DISPATCHED.value, OrderStatus.CANCELLED.value},
-			OrderStatus.DISPATCHED.value: {OrderStatus.COMPLETED.value},
+			OrderStatus.PENDING.value: {OrderStatus.ON_GOING.value, OrderStatus.REJECTED.value},
+			OrderStatus.ON_GOING.value: {OrderStatus.READY.value, OrderStatus.REJECTED.value},
+			OrderStatus.READY.value: {OrderStatus.COMPLETED.value},
+			OrderStatus.REJECTED.value: set(),
 			OrderStatus.COMPLETED.value: set(),
-			OrderStatus.CANCELLED.value: set(),
 		}
 		current = order.status
 		if new_status not in allowed.get(current, set()):
