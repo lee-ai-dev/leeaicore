@@ -573,6 +573,258 @@ paths:
               schema:
                 $ref: '#/components/schemas/Complaint'
           description: ''
+  /api-v1/integrations/:
+    get:
+      operationId: admin_integrations_list
+      description: Admin-only list of supported integrations (dummy data).
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntegrationsSummaryData'
+          description: ''
+  /api-v1/integrations/admin/summary/:
+    get:
+      operationId: admin_integrations_summary
+      description: Admin-only integrations summary (computed).
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api-v1/integrations/admin/whatsapp/:
+    get:
+      operationId: admin_whatsapp_integrations_list
+      description: 'Admin onboarding: CRUD WhatsApp integrations per restaurant.'
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WhatsAppIntegration'
+          description: ''
+    post:
+      operationId: admin_whatsapp_integrations_create
+      description: 'Admin onboarding: CRUD WhatsApp integrations per restaurant.'
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminWhatsAppIntegrationUpsert'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminWhatsAppIntegrationUpsert'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminWhatsAppIntegrationUpsert'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppIntegration'
+          description: ''
+  /api-v1/integrations/admin/whatsapp/{id}/:
+    get:
+      operationId: admin_whatsapp_integrations_get
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppIntegration'
+          description: ''
+    patch:
+      operationId: admin_whatsapp_integrations_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminWhatsAppIntegrationUpsert'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminWhatsAppIntegrationUpsert'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminWhatsAppIntegrationUpsert'
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppIntegration'
+          description: ''
+    delete:
+      operationId: admin_whatsapp_integrations_delete
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '204':
+          description: No response body
+  /api-v1/integrations/whatsapp/health/:
+    get:
+      operationId: restaurant_whatsapp_integration_health
+      description: Checks the configured WhatsApp integration against Meta Graph API.
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api-v1/integrations/whatsapp/me/:
+    get:
+      operationId: restaurant_whatsapp_integration_get
+      description: 'Restaurant owner: view/update their WhatsApp integration config.'
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppIntegration'
+          description: ''
+    post:
+      operationId: restaurant_whatsapp_integration_upsert
+      description: 'Restaurant owner: view/update their WhatsApp integration config.'
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WhatsAppIntegration'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WhatsAppIntegration'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WhatsAppIntegration'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppIntegration'
+          description: ''
+  /api-v1/integrations/whatsapp/webhook/:
+    get:
+      operationId: whatsapp_webhook_verify
+      description: |-
+        Meta WhatsApp Cloud API webhook endpoint.
+
+        - GET: verification handshake
+        - POST: inbound messages/statuses
+      parameters:
+      - in: query
+        name: hub.challenge
+        schema:
+          type: string
+      - in: query
+        name: hub.mode
+        schema:
+          type: string
+      - in: query
+        name: hub.verify_token
+        schema:
+          type: string
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    post:
+      operationId: whatsapp_webhook_ingest
+      description: |-
+        Meta WhatsApp Cloud API webhook endpoint.
+
+        - GET: verification handshake
+        - POST: inbound messages/statuses
+      tags:
+      - api-v1
+      security:
+      - knoxApiToken: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api-v1/login/:
     post:
       operationId: login
@@ -886,6 +1138,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentRefund'
+          description: ''
+  /api-v1/payments/verify-account/:
+    post:
+      operationId: account_detail_verification
+      description: Resolve a bank account number and bank code via Paystack and return
+        the account name.
+      tags:
+      - api-v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountDetailVerificationRequest'
+            examples:
+              ResolveBankAccount(Paystack):
+                value:
+                  account_number: 0123456789
+                  bank_code: '044'
+                summary: Resolve Bank Account (Paystack)
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AccountDetailVerificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AccountDetailVerificationRequest'
+        required: true
+      security:
+      - knoxApiToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDetailVerificationResponse'
+              examples:
+                ResolveBankAccountResponse:
+                  value:
+                    provider: PAYSTACK
+                    account_number: 0123456789
+                    account_name: JOHN DOE
+                    bank_code: '044'
+                    bank_id: 12
+                  summary: Resolve Bank Account Response
           description: ''
   /api-v1/register/:
     post:
@@ -2060,6 +2355,36 @@ paths:
           description: ''
 components:
   schemas:
+    AccountDetailVerificationRequest:
+      type: object
+      properties:
+        account_number:
+          type: string
+          maxLength: 50
+        bank_code:
+          type: string
+          maxLength: 50
+      required:
+      - account_number
+      - bank_code
+    AccountDetailVerificationResponse:
+      type: object
+      properties:
+        provider:
+          type: string
+        account_number:
+          type: string
+        account_name:
+          type: string
+        bank_code:
+          type: string
+        bank_id:
+          type: integer
+        raw:
+          type: object
+          additionalProperties: {}
+      required:
+      - provider
     AdminRestaurantList:
       type: object
       properties:
@@ -2174,6 +2499,38 @@ components:
           default: true
       required:
       - id
+    AdminWhatsAppIntegrationUpsert:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        restaurant_id:
+          type: integer
+          writeOnly: true
+        enabled:
+          type: boolean
+        display_name:
+          type: string
+          maxLength: 120
+        phone_number_id:
+          type: string
+          maxLength: 64
+        waba_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        business_account_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        access_token:
+          type: string
+          nullable: true
+      required:
+      - id
+      - phone_number_id
+      - restaurant_id
     Bank:
       type: object
       description: Shape of a single bank item as returned by Paystack /bank.
@@ -2380,6 +2737,55 @@ components:
           type: string
       required:
       - message
+    IntegrationSummary:
+      type: object
+      properties:
+        integration:
+          type: string
+        clients:
+          type: integer
+        category:
+          type: string
+        status:
+          type: string
+        lastsync:
+          type: string
+          format: date-time
+      required:
+      - category
+      - clients
+      - integration
+      - lastsync
+      - status
+    IntegrationsSummaryData:
+      type: object
+      properties:
+        summary:
+          $ref: '#/components/schemas/IntegrationsSummaryOverview'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/IntegrationSummary'
+      required:
+      - data
+      - summary
+    IntegrationsSummaryOverview:
+      type: object
+      properties:
+        total_clients:
+          type: integer
+        supported_integrations:
+          type: integer
+        failed_integrations:
+          type: integer
+        most_used_integration:
+          type: string
+          nullable: true
+      required:
+      - failed_integrations
+      - most_used_integration
+      - supported_integrations
+      - total_clients
     Login:
       type: object
       properties:
@@ -2565,21 +2971,45 @@ components:
     OrderStatusUpdateStatusEnum:
       enum:
       - PENDING
-      - CONFIRMED
-      - PREPARING
+      - ON GOING
       - READY
-      - DISPATCHED
       - COMPLETED
-      - CANCELLED
+      - REJECTED
       type: string
       description: |-
         * `PENDING` - PENDING
-        * `CONFIRMED` - CONFIRMED
-        * `PREPARING` - PREPARING
+        * `ON GOING` - ON GOING
         * `READY` - READY
-        * `DISPATCHED` - DISPATCHED
         * `COMPLETED` - COMPLETED
-        * `CANCELLED` - CANCELLED
+        * `REJECTED` - REJECTED
+    PatchedAdminWhatsAppIntegrationUpsert:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        restaurant_id:
+          type: integer
+          writeOnly: true
+        enabled:
+          type: boolean
+        display_name:
+          type: string
+          maxLength: 120
+        phone_number_id:
+          type: string
+          maxLength: 64
+        waba_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        business_account_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        access_token:
+          type: string
+          nullable: true
     PatchedDishCreateUpdate:
       type: object
       properties:
@@ -3446,6 +3876,65 @@ components:
       required:
       - otp
       - phone
+    WhatsAppIntegration:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        restaurant_id:
+          type: integer
+          readOnly: true
+        enabled:
+          type: boolean
+        display_name:
+          type: string
+          maxLength: 120
+        phone_number_id:
+          type: string
+          maxLength: 64
+        waba_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        business_account_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        access_token:
+          type: string
+          nullable: true
+        last_inbound_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_outbound_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_error:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - last_error
+      - last_inbound_at
+      - last_outbound_at
+      - phone_number_id
+      - restaurant_id
+      - updated_at
   securitySchemes:
     knoxApiToken:
       type: apiKey
