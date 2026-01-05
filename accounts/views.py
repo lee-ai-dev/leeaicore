@@ -246,7 +246,7 @@ class VerifyOTPAPI(APIView):
         phone = request.query_params.get('phone')
         if not phone:
             return Response({'error': 'phone number is required'}, status=status.HTTP_400_BAD_REQUEST)
-        code = random.randint(100000, 999999)
+        code = random.randint(1000, 9999)
         try:
             otp = OTP.objects.filter(phone=phone).first()
             if otp:
