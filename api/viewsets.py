@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Q, Sum, Count
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
@@ -22,6 +22,9 @@ from api.serializers import (
 	DishSerializer,
 	DishCreateUpdateSerializer,
 	IntegrationsSummaryDataSerializer,
+	IntegrationsCatalogResponseSerializer,
+	IntegrationCreateRequestSerializer,
+	IntegrationCreateResponseSerializer,
 	MenuQuerySerializer,
 	OrderSerializer,
 	PaymentConfirmSerializer,
@@ -51,7 +54,9 @@ from api.serializers import (
 from leeaicore.sysutils.constants import ComplaintStatus, OrderStatus, PaymentStatus
 from leeaicore.sysutils.permissions import IsStaffAdmin
 from api.services import PaystackClient, enforce_subscription_limit
-from integrations.services import build_integrations_summary
+from integrations.services import build_integrations_catalog, build_integrations_summary
+from integrations.models import WhatsAppIntegration
+from integrations.serializers import WhatsAppIntegrationSerializer
 from typing import Dict
 from knox.models import AuthToken
 
@@ -1408,7 +1413,8 @@ class RestaurantOrderUpdateAPI(APIView):
 		new_status = ser.validated_data['status']
 		# Enforce allowed state transitions
 		allowed = {
-			OrderStatus.PENDING.value: {OrderStatus.ON_GOING.value, OrderStatus.REJECTED.value},
+			OrderStatus.PENDING.value: {OrderStatus.CONFIRMED.value, OrderStatus.ON_GOING.value, OrderStatus.REJECTED.value},
+			OrderStatus.CONFIRMED.value: {OrderStatus.ON_GOING.value, OrderStatus.READY.value, OrderStatus.REJECTED.value},
 			OrderStatus.ON_GOING.value: {OrderStatus.READY.value, OrderStatus.REJECTED.value},
 			OrderStatus.READY.value: {OrderStatus.COMPLETED.value},
 			OrderStatus.REJECTED.value: set(),
@@ -1805,4 +1811,60 @@ class IntegrationsViewSet(viewsets.ViewSet):
 	def list(self, request):
 		payload = build_integrations_summary()
 		serializer = IntegrationsSummaryDataSerializer(instance=payload)
+		return Response(serializer.data)
+
+	@extend_schema(
+		request=IntegrationCreateRequestSerializer,
+		responses={201: IntegrationCreateResponseSerializer},
+		operation_id='admin_integrations_create',
+		description='Admin-only: create an integration (currently supports whatsapp).'
+	)
+	@transaction.atomic
+	def create(self, request):
+		ser = IntegrationCreateRequestSerializer(data=request.data)
+		ser.is_valid(raise_exception=True)
+		integration = ser.validated_data['integration']
+
+		if integration != 'whatsapp':
+			return Response({'message': f"Integration '{integration}' create not supported yet"}, status=400)
+
+		restaurant_id = ser.validated_data['restaurant_id']
+		restaurant = Restaurant.objects.filter(id=restaurant_id).first()
+		if not restaurant:
+			return Response({'message': 'Restaurant not found'}, status=404)
+
+		if WhatsAppIntegration.objects.filter(restaurant=restaurant).exists():
+			return Response({'message': 'WhatsApp integration already exists for this restaurant'}, status=409)
+
+		try:
+			obj = WhatsAppIntegration.objects.create(
+				restaurant=restaurant,
+				enabled=ser.validated_data.get('enabled', True),
+				display_name=ser.validated_data.get('display_name', ''),
+				phone_number_id=ser.validated_data.get('phone_number_id'),
+				waba_id=ser.validated_data.get('waba_id'),
+				business_account_id=ser.validated_data.get('business_account_id'),
+			)
+		except IntegrityError as e:
+			msg = str(e)
+			if 'phone_number_id' in msg:
+				return Response({'message': 'phone_number_id is already in use'}, status=409)
+			return Response({'message': 'Could not create integration'}, status=400)
+
+		return Response(
+			{
+				'integration': 'whatsapp',
+				'data': WhatsAppIntegrationSerializer(obj).data,
+			},
+			status=201,
+		)
+
+	@extend_schema(
+		responses={200: IntegrationsCatalogResponseSerializer},
+		operation_id='admin_integrations_catalog',
+		description='Admin-only integrations catalog with vendor counts.'
+	)
+	def catalog(self, request):
+		data = build_integrations_catalog()
+		serializer = IntegrationsCatalogResponseSerializer(instance={'data': data})
 		return Response(serializer.data)

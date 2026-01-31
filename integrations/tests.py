@@ -105,6 +105,50 @@ class WhatsAppIntegrationTests(TestCase):
 		whatsapp_row = next((x for x in res.data['data'] if x.get('integration') == 'whatsapp'), None)
 		self.assertIsNotNone(whatsapp_row)
 
+	def test_api_admin_integrations_catalog_endpoint(self):
+		self.client.force_authenticate(user=self.admin)
+		res = self.client.get('/api-v1/integrations/catalog/')
+		self.assertEqual(res.status_code, 200, res.data)
+		self.assertIn('data', res.data)
+		rows = res.data['data']
+		self.assertTrue(isinstance(rows, list))
+		whatsapp_row = next((x for x in rows if x.get('integration') == 'whatsapp'), None)
+		self.assertIsNotNone(whatsapp_row)
+		self.assertIn('category', whatsapp_row)
+		self.assertIn('vendors', whatsapp_row)
+		self.assertIn('status', whatsapp_row)
+		self.assertGreaterEqual(int(whatsapp_row.get('vendors') or 0), 1)
+		paystack_row = next((x for x in rows if x.get('integration') == 'paystack'), None)
+		self.assertIsNotNone(paystack_row)
+
+	def test_api_admin_can_create_whatsapp_integration_via_integrations_endpoint(self):
+		self.client.force_authenticate(user=self.admin)
+		other_owner = User.objects.create_user(
+			email='owner3@example.com',
+			phone='233200000003',
+			password='pass1234',
+			name='Owner 3',
+		)
+		other_owner.role = 'RESTAURANT'
+		other_owner.save(update_fields=['role'])
+		other_restaurant = Restaurant.objects.create(user=other_owner, name='Test Resto 3', phone='0550000002')
+
+		res = self.client.post(
+			'/api-v1/integrations/',
+			{
+				'integration': 'whatsapp',
+				'restaurant_id': other_restaurant.id,
+				'enabled': True,
+				'display_name': 'WA Bot 3',
+				'phone_number_id': 'pnid_3000',
+			},
+			format='json',
+		)
+		self.assertEqual(res.status_code, 201, res.data)
+		self.assertEqual(res.data.get('integration'), 'whatsapp')
+		self.assertIn('data', res.data)
+		self.assertEqual(res.data['data']['phone_number_id'], 'pnid_3000')
+
 	@override_settings(WHATSAPP_WEBHOOK_VERIFY_TOKEN='verify_me')
 	def test_webhook_verification(self):
 		url = reverse('whatsapp_webhook')

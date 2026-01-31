@@ -278,3 +278,51 @@ def build_integrations_summary() -> dict:
         },
         'data': data,
     }
+
+
+def build_integrations_catalog() -> list[dict]:
+    """Return supported integrations with vendor counts.
+
+    Shape: [{integration, category, vendors, status}, ...]
+    """
+    from api.models import Payment
+    from .models import WhatsAppIntegration
+
+    paystack_active = bool(getattr(settings, 'PAYSTACK_SECRET_KEY', ''))
+    paystack_vendors = (
+        Payment.objects.filter(provider__iexact='PAYSTACK')
+        .values_list('order__restaurant_id', flat=True)
+        .distinct()
+        .count()
+        if paystack_active
+        else 0
+    )
+
+    wa_enabled = WhatsAppIntegration.objects.filter(enabled=True)
+    wa_vendors = wa_enabled.count()
+    wa_has_token = bool(getattr(settings, 'WHATSAPP_ACCESS_TOKEN', '')) or wa_enabled.exclude(access_token__isnull=True).exclude(access_token='').exists()
+    whatsapp_status = 'active' if (wa_vendors > 0 and wa_has_token) else 'inactive'
+
+    # Stripe placeholder
+    stripe_status = 'inactive'
+
+    return [
+        {
+            'integration': 'whatsapp',
+            'category': 'messaging',
+            'vendors': int(wa_vendors),
+            'status': whatsapp_status,
+        },
+        {
+            'integration': 'paystack',
+            'category': 'payment',
+            'vendors': int(paystack_vendors),
+            'status': 'active' if paystack_active else 'inactive',
+        },
+        {
+            'integration': 'stripe',
+            'category': 'payment',
+            'vendors': 0,
+            'status': stripe_status,
+        },
+    ]

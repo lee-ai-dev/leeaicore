@@ -71,5 +71,6 @@ urlpatterns += [
     path('admin/dishes/', vs.AdminDishesAPI.as_view(), name='admin_dishes'),
     path('admin/payments/', vs.AdminPaymentsAPI.as_view(), name='admin_payments'),
     path('admin/analytics/', vs.AdminAnalyticsAPI.as_view(), name='admin_analytics'),
-    path('integrations/', vs.IntegrationsViewSet.as_view({'get': 'list'}), name='integrations'),
+    path('integrations/', vs.IntegrationsViewSet.as_view({'get': 'list', 'post': 'create'}), name='integrations'),
+    path('integrations/catalog/', vs.IntegrationsViewSet.as_view({'get': 'catalog'}), name='integrations_catalog'),
 ]

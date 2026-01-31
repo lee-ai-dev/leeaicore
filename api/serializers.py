@@ -202,6 +202,17 @@ class AccountDetailVerificationResponseSerializer(serializers.Serializer):
     raw = serializers.DictField(child=serializers.JSONField(), required=False)
 
 
+class IntegrationsCatalogRowSerializer(serializers.Serializer):
+    integration = serializers.CharField()
+    category = serializers.CharField()
+    vendors = serializers.IntegerField()
+    status = serializers.CharField()
+
+
+class IntegrationsCatalogResponseSerializer(serializers.Serializer):
+    data = IntegrationsCatalogRowSerializer(many=True)
+
+
 class PaymentSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.name', read_only=True)
     restaurant_name = serializers.CharField(source='order.restaurant.name', read_only=True)
@@ -407,3 +418,32 @@ class IntegrationsSummaryOverviewSerializer(serializers.Serializer):
 class IntegrationsSummaryDataSerializer(serializers.Serializer):
     summary = IntegrationsSummaryOverviewSerializer()
     data = IntegrationSummarySerializer(many=True)
+
+
+class IntegrationCreateRequestSerializer(serializers.Serializer):
+    integration = serializers.ChoiceField(choices=['whatsapp', 'paystack', 'stripe'])
+
+    # Common
+    restaurant_id = serializers.IntegerField(required=False)
+
+    # WhatsApp fields
+    enabled = serializers.BooleanField(required=False, default=True)
+    display_name = serializers.CharField(required=False, allow_blank=True, default='')
+    phone_number_id = serializers.CharField(required=False, allow_blank=True)
+    waba_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    business_account_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs):
+        integration = attrs.get('integration')
+        restaurant_id = attrs.get('restaurant_id')
+        if integration == 'whatsapp':
+            if not restaurant_id:
+                raise serializers.ValidationError({'restaurant_id': 'restaurant_id is required for WhatsApp integration'})
+            if not (attrs.get('phone_number_id') or '').strip():
+                raise serializers.ValidationError({'phone_number_id': 'phone_number_id is required for WhatsApp integration'})
+        return attrs
+
+
+class IntegrationCreateResponseSerializer(serializers.Serializer):
+    integration = serializers.CharField()
+    data = serializers.DictField(child=serializers.JSONField(), required=True)

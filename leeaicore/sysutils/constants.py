@@ -15,6 +15,7 @@ class Status(Enum):
 # More specific statuses for domain entities
 class OrderStatus(Enum):
     PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
     ON_GOING = "ON GOING"
     READY = "READY"
     COMPLETED = "COMPLETED"
